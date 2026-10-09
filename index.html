@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <title>三三 · 拼团分销模拟器</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+  <div class="max-w-[1560px] mx-auto px-4 sm:px-7 lg:px-10 pb-8">
+    <header class="flex items-center justify-between gap-4 py-6 border-b border-slate-800">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-500 grid grid-cols-3 gap-1 p-2.5 shadow-lg shadow-blue-500/10" aria-hidden="true">
+          <i class="bg-white rounded-sm"></i><i class="bg-white/80 rounded-sm"></i><i class="bg-white/50 rounded-sm"></i>
+          <i class="bg-white/80 rounded-sm"></i><i class="bg-white/50 rounded-sm"></i><i class="bg-white/30 rounded-sm"></i>
+          <i class="bg-white/50 rounded-sm"></i><i class="bg-white/30 rounded-sm"></i><i class="bg-white/20 rounded-sm"></i>
+        </div>
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span class="text-xl font-semibold tracking-widest">三三</span><span class="text-xs text-slate-500">拼团分销模拟器</span></div>
+      </div>
+      <div class="flex items-center gap-4">
+        <span class="hidden sm:inline-flex items-center gap-2 text-xs muted"><span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>静态沙盒</span>
+        <button id="reset-open" class="secondary text-xs" disabled>↺ 重置模拟</button>
+      </div>
+    </header>
+
+    <section class="pt-7 pb-6 flex flex-wrap items-end justify-between gap-4">
+      <div><p class="eyebrow mb-2">NETWORK SIMULATOR / 01</p><h1 class="text-2xl sm:text-[29px] font-semibold tracking-tight">让每一笔分配，都清晰可见。</h1><p class="muted text-xs sm:text-sm mt-2">邀请成员，查看直推关系，实时观察四大奖金的流转。</p></div>
+      <div class="rounded-xl border border-slate-700/70 bg-slate-800/40 px-4 py-3 flex items-center gap-4"><span class="text-xs muted">统一商品单价</span><span class="mono text-xl font-semibold">¥199<span class="text-xs muted font-normal">.00</span></span></div>
+    </section>
+
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6" aria-label="系统统计">
+      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">系统成员</span><span class="stat-icon" aria-hidden="true">◎</span></div><div class="mt-2 flex items-baseline gap-2"><strong id="stat-users" class="mono text-2xl font-semibold">1</strong><span class="text-xs muted">人</span></div><p class="text-[10px] text-slate-500 mt-2">含初始账号张三</p></div>
+      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">模拟订单金额</span><span class="stat-icon" aria-hidden="true">↗</span></div><strong id="stat-sales" class="mono block mt-2 text-2xl font-semibold">¥0.00</strong><p id="stat-orders" class="text-[10px] text-slate-500 mt-2">0 笔已结算订单</p></div>
+      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">累计发放奖金</span><span class="stat-icon" aria-hidden="true">＋</span></div><strong id="stat-bonus" class="mono block mt-2 text-2xl font-semibold text-blue-300">¥0.00</strong><p class="text-[10px] text-slate-500 mt-2">四类奖金合计</p></div>
+      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">成功拼团</span><span class="stat-icon" aria-hidden="true">◇</span></div><div class="mt-2 flex items-baseline gap-2"><strong id="stat-groups" class="mono text-2xl font-semibold">0</strong><span class="text-xs muted">团</span></div><p class="text-[10px] text-slate-500 mt-2">每位团长首次成团计一次</p></div>
+    </section>
+
+    <main class="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[344px_minmax(0,1fr)] gap-5 items-start">
+      <aside class="space-y-4 min-w-0">
+        <section class="panel p-5" aria-label="控制与用户概览">
+          <div class="flex items-center justify-between mb-4"><h2 class="font-semibold text-sm">操作中心</h2><span class="eyebrow">CONTROL</span></div>
+          <label for="operator" class="text-xs muted block mb-2">当前操作人</label>
+          <select id="operator" class="field" aria-label="当前操作人"></select>
+          <div class="flex items-center gap-3 mt-6"><div id="user-avatar" class="mono flex items-center justify-center w-12 h-12 rounded-xl border border-blue-500/40 bg-blue-500/10 text-blue-200 font-semibold">张三</div><div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 id="user-name" class="text-lg font-semibold break-all">张三</h3><span id="user-role" class="role-badge ordinary">普通</span></div><p id="user-parent" class="muted text-[11px] mt-1">直接推荐人 · 无（根节点）</p></div></div>
+          <div class="mt-5"><div class="text-xs muted">累计总收益</div><div id="user-income" class="mono text-[32px] font-semibold tracking-tight mt-1 text-white">¥0.00</div><div id="user-spent" class="text-[10px] muted mt-1">模拟下单支出 ¥0.00</div></div>
+          <div class="grid grid-cols-2 gap-3 mt-5 pb-5 border-b border-slate-700/60"><div><p class="text-[11px] muted">直推人数</p><p class="mt-1"><strong id="user-direct" class="mono text-lg font-semibold">0</strong><span class="text-[10px] muted ml-1">人</span></p></div><div class="pl-4 border-l border-slate-700/60"><p class="text-[11px] muted">团队总人数<span class="text-[9px] text-slate-500 ml-1">含本人</span></p><p class="mt-1"><strong id="user-team" class="mono text-lg font-semibold">1</strong><span class="text-[10px] muted ml-1">人</span></p></div></div>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-4 py-5" aria-label="四类奖金">
+            <div class="reward-card reward-tone-direct"><p class="text-[11px]"><i class="reward-dot direct"></i>直推奖 <span data-reward-rate="direct" class="text-xs font-semibold">20%</span></p><p id="reward-direct" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-group"><p class="text-[11px]"><i class="reward-dot group"></i>拼团奖 <span data-reward-rate="group" class="text-xs font-semibold">15%</span></p><p id="reward-group" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-order"><p class="text-[11px]"><i class="reward-dot order"></i>订单奖 <span data-reward-rate="order" class="text-xs font-semibold">10%</span></p><p id="reward-order" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-management"><p class="text-[11px]"><i class="reward-dot management"></i>管理奖 <span data-reward-rate="management" class="text-xs font-semibold">8%</span></p><p id="reward-management" class="mono text-sm mt-1.5">¥0.00</p></div>
+          </div>
+          <p class="text-[10px] muted -mt-1 mb-4 leading-relaxed">订单奖仅限扶持区（第 3 位起）；管理奖 8% 为每单共享总额。侧栏金额为当前操作人的累计收益。</p>
+          <div class="rounded-xl bg-slate-950/30 border border-slate-700/40 p-3.5"><div class="flex justify-between text-[11px]"><span class="muted">1 + 2 三人成团进度</span><span id="group-status" class="text-blue-300">1 / 3</span></div><p id="user-group-members" class="text-[10px] text-violet-300 mt-2.5 break-words"></p><div id="group-dots" class="flex justify-center gap-4 mt-3" aria-hidden="true"></div><p id="group-hint" class="text-[10px] muted mt-2.5 leading-relaxed">本人加前两名直推，共 3 人即可成团。</p></div>
+          <button id="invite-open" class="primary w-full mt-5 flex items-center justify-center gap-2"><span class="text-lg leading-none" aria-hidden="true">＋</span> 新增下线 / 邀请人</button>
+          <p class="text-[10px] text-slate-500 text-center mt-2.5">每次新增自动模拟支付 199 元并结算</p>
+        </section>
+
+        <details class="panel px-5 py-4 text-xs">
+          <summary class="text-slate-300 font-medium">结算规则与口径 <span class="text-[10px] text-slate-500 ml-1">点击展开</span></summary>
+          <div class="muted mt-4 space-y-3 leading-relaxed">
+            <p><strong class="text-slate-300">初始成员与命名：</strong>系统从“张三”开始，张三没有初始订单。张三的直推依次为 A1、A2、A3…；下一代为 B1、B2…，再往后为 C、D 等字母组，Z 后延续 AA。同代数字全局递增。</p>
+            <p><strong class="text-slate-300">拼团区与扶持区：</strong>对每个推荐人分别统计邀请顺序：第 1、2 位为拼团区，第 3 位起为扶持区。以实际邀请顺序为准，自定义账号名称不改变分区。紫色虚线框只圈出该推荐人的前两名直推。</p>
+            <p><strong class="text-slate-300">下单与身份：</strong>两区新增成员都生成一笔 199 元模拟支付订单。本人加前两名直推，组成 1+2 共 3 人，即成为“团长”；尚未成团显示“普通”。每个账号独立成团，孙辈不计入本人的成团人数。</p>
+            <p><strong class="text-slate-300">直推奖 20%：</strong>仅第 1 位直推的订单向推荐人发放 199 × 20% = 39.80 元。例如 A1 给张三直推奖；A2、A3 及之后的订单不再给张三直推奖。</p>
+            <p><strong class="text-slate-300">拼团奖 15%：</strong>第 2 位直推加入时，本人和前两位直推共 3 人成团。直接推荐人获得 199 × 15% = 29.85 元拼团奖，并附加 29.85 × 8% ≈ 2.39 元管理奖；每人成团仅结算一次。例如 A2 给张三拼团奖，B1、B2、B3、B4 不给张三拼团奖。</p>
+            <p><strong class="text-slate-300">订单奖 10%：</strong>第 3 位及之后的直推（扶持区），每笔订单向直接推荐人发放 199 × 10% = 19.90 元，不叠加直推奖或拼团奖。例如张三从 A3、A4、A5…获得订单奖。前两位不产生订单奖，也不向全部祖先重复发放。</p>
+            <p><strong class="text-slate-300">管理奖 8%：</strong>两区订单均将 199 × 8% = 15.92 元分给买家的全部直推祖先，等份共享，不设人数或身份要求，买家本人不参与。金额按整数分计算，尾差从近到远补齐：2 人各 7.96 元；3 人依次为 5.31、5.31、5.30 元。</p>
+            <p><strong class="text-slate-300">节点收益视角：</strong>选中的节点为收益主节点，显示其累计收益；其他节点显示自己下单时实际给主节点发放的四类奖金，不合并下级贡献。拼团奖计入触发成团的那笔订单；无入账记录显示 0 元。切换选择只改变显示，不改变奖金结算。</p>
+            <p><strong class="text-slate-300">删除与重算：</strong>红叉删除当前节点、全部下级和相关订单；再按保留订单的原始顺序重算分区、四类奖金及普通/团长身份。若原扶持区成员重排进入前两位，对应订单奖会撤销。张三的红叉清空全部记录并恢复初始张三。</p>
+            <p><strong class="text-slate-300">模拟边界：</strong>所有数据仅保存在本页内存中，刷新即重置。199 元支付为模拟支出，不发生真实扣款，也不从奖金账户抵扣。</p>
+          </div>
+        </details>
+      </aside>
+
+      <div class="space-y-5 min-w-0">
+        <section class="panel overflow-hidden" aria-label="关系树">
+          <div class="p-5 border-b border-slate-700/60"><div class="flex flex-wrap items-center justify-between gap-2"><h2 id="tree-title" class="font-semibold text-sm">直推关系树</h2><div class="flex gap-2" role="group" aria-label="节点四奖明细"><button id="collapse-rewards" class="secondary text-[10px] !py-1.5">全部收起</button><button id="expand-rewards" class="secondary text-[10px] !py-1.5">全部打开</button></div></div><p id="tree-description" class="text-[11px] muted mt-1.5">按住拖动，滚轮或 ＋/− 缩放；紫色虚线标注拼团区归属，四奖明细默认收起。</p><p class="text-[11px] text-blue-200 mt-2">收益主节点：<strong id="contribution-target">张三</strong> · 其他节点显示其订单为主节点贡献的收益</p></div>
+          <div class="px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800"><p class="text-[11px] muted">视图根节点 <strong id="view-root" class="mono text-slate-200 ml-1">张三</strong><span id="tree-count" class="text-slate-500 ml-3">1 位成员</span></p><div class="flex flex-wrap items-center gap-2"><div class="flex items-center gap-1" role="group" aria-label="关系树缩放"><button id="zoom-out" class="secondary text-xs !px-2 !py-1.5" aria-label="缩小关系树">−</button><button id="zoom-reset" class="secondary mono text-[10px] !px-2 !py-1.5" aria-label="重置为 100% 并居中" title="重置为 100% 并居中">100%</button><button id="zoom-in" class="secondary text-xs !px-2 !py-1.5" aria-label="放大关系树">＋</button></div><button id="center-tree" class="secondary text-[10px] !py-1.5" title="将当前团队顶点恢复到画布中央">居中</button><button id="focus-tree" class="text-[11px] text-blue-300 hover:text-blue-200 px-2 py-1">查看所选团队 ↗</button><button id="root-tree" class="secondary text-[10px] !py-1.5" hidden>返回全图</button></div></div>
+          <div id="tree-stage" class="tree-stage" role="region" aria-labelledby="tree-title" aria-description="拖动平移画布，滚轮缩放，点击节点切换收益主节点。聚焦画布后可用方向键平移、加减键缩放、Home 键居中。" tabindex="0"><div id="tree-canvas" class="tree-canvas"><div id="tree" class="tree"></div><div id="tree-empty" class="text-center px-5 pb-9"><div class="w-px h-6 bg-slate-600 mx-auto -mt-5 mb-4"></div><div class="inline-block rounded-xl border border-dashed border-slate-600/70 px-8 py-5 bg-slate-900/30"><div class="text-sm text-slate-300">网络，从第一位伙伴开始</div><p class="text-[11px] muted mt-2">点击左侧「新增下线」，观察订单与奖金如何流转。</p></div></div></div></div>
+          <div class="flex flex-wrap justify-between gap-2 px-5 py-3 border-t border-slate-700/60 text-[10px] muted"><span>缩放 35%–200% · 亮框为收益主节点 · 红叉删除分支及记录</span><span><span class="text-blue-300">蓝色节点</span> · <span class="text-violet-300">紫线：拼团区</span> · <span class="text-teal-300">青绿线：扶持区</span></span></div>
+        </section>
+
+        <section class="panel overflow-hidden" aria-label="结算与收益明细">
+          <div class="flex flex-wrap justify-between items-center gap-3 p-5 border-b border-slate-700/60"><div role="tablist" aria-label="流水类型" class="flex gap-1"><button id="tab-orders" class="tab !px-3" role="tab" aria-selected="true" aria-controls="ledger-content" data-ledger="orders">订单结算</button><button id="tab-income" class="tab !px-3" role="tab" aria-selected="false" aria-controls="ledger-content" data-ledger="income" tabindex="-1">收益明细</button></div><span id="ledger-label" class="text-[11px] muted">全系统 · 0 笔订单</span></div>
+          <div id="ledger-content" role="tabpanel" aria-labelledby="tab-orders"></div>
+          <div id="pagination" class="border-t border-slate-700/60 px-5 py-3 flex justify-between items-center text-[11px] muted" hidden><span id="page-label"></span><div class="flex gap-2"><button id="page-prev" class="secondary !py-1">上一页</button><button id="page-next" class="secondary !py-1">下一页</button></div></div>
+        </section>
+      </div>
+    </main>
+    <footer class="flex flex-wrap justify-between gap-3 text-[10px] text-slate-500 pt-7"><span>三三模式 · 系统逻辑静态模拟</span><span>数据仅保留于本页，刷新即重置 · Tailwind 样式需联网加载 · 无真实扣款</span></footer>
+  </div>
+
+  <dialog id="invite-dialog" aria-labelledby="invite-title">
+    <div class="flex items-start justify-between gap-4"><div><p class="eyebrow mb-2">NEW MEMBER</p><h2 id="invite-title" class="text-xl font-semibold">邀请一位新伙伴</h2></div><button id="invite-close" type="button" class="secondary !px-2 !py-1" aria-label="关闭邀请弹窗">✕</button></div>
+    <p class="muted text-xs mt-2 mb-6">创建账号后，自动完成一笔模拟订单及奖金结算。</p>
+    <form id="invite-form">
+      <label for="invite-referrer" class="block text-xs text-slate-300 mb-2">直接推荐人</label><select id="invite-referrer" class="field mb-4" required></select>
+      <label for="invite-name" class="block text-xs text-slate-300 mb-2">新账号名称 <span class="muted">· 留空自动生成</span></label><input id="invite-name" class="field mono" maxlength="14" autocomplete="off" spellcheck="false" aria-describedby="name-hint invite-error"><p id="name-hint" class="text-[10px] muted mt-2"></p>
+      <div class="rounded-xl bg-slate-950/40 border border-slate-700/50 p-4 mt-5"><div class="flex justify-between text-xs"><span class="muted">本次模拟扣款</span><strong class="mono text-base">¥199.00</strong></div><p id="invite-reward-preview" class="text-[10px] muted mt-3"></p></div>
+      <p id="invite-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p>
+      <button id="invite-submit" type="submit" class="primary w-full mt-5">确认邀请并模拟下单</button><p class="text-[10px] muted mt-3 text-center">仅记录模拟支出，不发生真实支付。</p>
+    </form>
+  </dialog>
+
+  <dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title" class="text-lg font-semibold">重新开始模拟？</h2><p class="text-sm muted mt-3 leading-relaxed">本页现有成员、订单及奖金记录将清空，恢复为初始账号张三。</p><div class="flex justify-end gap-3 mt-6"><button id="reset-cancel" class="secondary">保留数据</button><button id="reset-confirm" class="primary !py-2">确认重置</button></div></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title" class="text-lg font-semibold text-rose-200">删除节点与记录</h2><p id="delete-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3 leading-relaxed">剩余订单将按原始顺序重新结算，收益和拼团状态同步更新，拼团区按保留的邀请顺序重新编号。</p><p id="delete-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p><div class="flex justify-end gap-3 mt-6"><button id="delete-cancel" class="secondary">取消</button><button id="delete-confirm" class="danger">删除分支与记录</button></div></dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <noscript><p style="padding:24px;color:#fda4af">此模拟器需要启用 JavaScript 才能运行。</p></noscript>
+<script id="simulation-engine" src="./assets/simulation-engine.js" defer></script>
+<script id="simulation-ui" src="./assets/simulation-ui.js" defer></script>
+</body>
+</html>
