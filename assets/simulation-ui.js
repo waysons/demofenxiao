@@ -10,7 +10,7 @@ let ledgerMode = 'orders';
 let page = 0;
 let toastTimer;
 const PAGE_SIZE = 12;
-const expanded = new Set();
+const expanded = new Map();
 const expandedRewards = new Set();
 
 function showToast(message) {
@@ -50,9 +50,15 @@ function renderUser() {
   for (const type of Object.keys(REWARD_NAMES)) $('reward-' + type).textContent = money(user.wallet[type]);
   const progress = sim.groupProgress(user.id);
   $('user-group-members').textContent = '拼团区：' + [0, 1].map(index => user.children[index] || '第 ' + (index + 1) + ' 位待邀请').join(' / ');
-  $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : progress + ' / 3';
-  $('group-dots').innerHTML = Array.from({ length: 3 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
-  $('group-hint').textContent = user.groupAwarded ? '已发拼团奖 29.85 元 + 成团附加管理奖 2.39 元，此团不重复结算。' : '本人加前两名直推，共 3 人即可成团；孙辈不触发本人的拼团奖。';
+  $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : progress + ' / 7';
+  $('group-dots').innerHTML = Array.from({ length: 7 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
+  $('group-hint').textContent = user.groupAwarded ? '已发拼团奖 29.85 元 + 管理奖 2.39 元，此团不重复结算。' : '本人 + 前两名直推 + 两人各自的前两名直推，满 7 人才能成为团长。';
+  const expired = sim.needsRepurchase(user.id);
+  $('qualification-status').textContent = expired
+    ? '本轮已满八层，需复购 199 元恢复邀请资格。'
+    : '可邀请 · 本轮已发展 ' + Math.max(0, user.maxDownlineDepth - user.renewedDepth) + ' / ' + REPURCHASE_LAYERS + ' 层（本人以下）';
+  $('invite-open').disabled = expired;
+  $('repurchase-open').hidden = !expired;
 }
 
 function renderTree() {
@@ -64,7 +70,7 @@ function renderTree() {
   // 按来源订单统计贡献，不累加分支收益，避免同一笔奖金被多层重复展示。
   const contributions = new Map();
   for (const order of sim.orders) {
-    const rewards = Object.fromEntries(Object.keys(REWARD_NAMES).map(type => [type, 0]));
+    const rewards = contributions.get(order.buyerId) || Object.fromEntries(Object.keys(REWARD_NAMES).map(type => [type, 0]));
     for (const payout of order.payouts) {
       if (payout.userId === selectedId) rewards[payout.type] += payout.cents;
     }
@@ -73,7 +79,7 @@ function renderTree() {
   const renderNode = (id, depth) => {
     const user = sim.get(id);
     const children = user.children;
-    const isOpen = depth < 2 || expanded.has(id);
+    const isOpen = expanded.get(id) ?? depth < 2;
     const selected = id === selectedId;
     const position = depth > 0 ? sim.get(user.referrerId).children.indexOf(id) + 1 : 0;
     const inGroupZone = position === 1 || position === 2;
@@ -90,12 +96,13 @@ function renderTree() {
       '" aria-pressed="' + selected + '" aria-label="选择 ' + escapeHTML(id) + '，' + sim.role(id) + '，团队 ' + user.teamSize + ' 人，' + escapeHTML(incomeLabel) + ' ' + money(total) + '">' +
       '<span class="flex items-center gap-1.5 pr-6"><strong class="mono text-sm truncate min-w-0" title="' + escapeHTML(id) + '">' + escapeHTML(id) + '</strong><span class="role-badge ' + (user.groupAwarded ? 'leader' : 'ordinary') + '">' + sim.role(id) + '</span></span>' +
       '<span class="zone-label">' + zoneLabel + '</span>' +
+      (sim.needsRepurchase(id) ? '<span class="block text-[10px] text-amber-300 mt-1">待复购 · 邀请暂停</span>' : '') +
       '<span class="block text-[10px] muted mt-2.5">团队 <b class="text-slate-300 font-normal mono">' + user.teamSize + '</b> 人 <span class="text-slate-600">/</span> 直推 ' + user.children.length + '</span>' +
       '<span class="block text-[10px] muted mt-2 break-words">' + escapeHTML(incomeLabel) + '</span><span class="node-income block mono text-sm text-blue-200 mt-1">' + money(total) + '</span></button>' +
       '<button type="button" class="node-reward-toggle" data-rewards-toggle="' + escapeHTML(id) + '" aria-expanded="' + rewardsOpen + '" aria-controls="node-rewards-' + escapeHTML(id) + '">' + (rewardsOpen ? '收起四奖明细 ▴' : '展开四奖明细 ▾') + '</button>' +
       '<div class="node-rewards" id="node-rewards-' + escapeHTML(id) + '"' + (rewardsOpen ? '' : ' hidden') + '>' + Object.entries(REWARD_NAMES).map(([type, name]) => '<span class="reward-tone-' + type + '">' + name + '<span class="mono" data-reward="' + type + '">' + money(rewards[type] || 0) + '</span></span>').join('') + '</div>' +
       '<button type="button" class="node-delete" data-delete="' + escapeHTML(id) + '" aria-label="' + escapeHTML(deleteLabel) + '" title="' + escapeHTML(deleteLabel) + '">×</button></div>';
-    const toggle = children.length && depth >= 2 ? '<button class="branch-toggle" data-expand="' + escapeHTML(id) + '" aria-expanded="' + isOpen + '">' + (isOpen ? '收起下级 −' : '展开下级 · ' + children.length + ' 人 ＋') + '</button>' : '';
+    const toggle = children.length ? '<button class="branch-toggle" data-expand="' + escapeHTML(id) + '" aria-expanded="' + isOpen + '" aria-label="' + (isOpen ? '收起 ' : '展开 ') + escapeHTML(id) + ' 的下级">' + (isOpen ? '收起下级 −' : '展开下级 · ' + children.length + ' 人 ＋') + '</button>' : '';
     return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
   };
   $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines" aria-hidden="true"></div>';
@@ -170,7 +177,7 @@ function renderLedger() {
   if (ledgerMode === 'income') {
     $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>来源订单</th><th>奖金类型</th><th>结算说明</th><th class="text-right">入账金额</th></tr></thead><tbody>' + visible.map(({ order, payout }) => '<tr><td><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1">下单人 ' + escapeHTML(order.buyerId) + '</span></td><td><span class="reward-tag reward-tone-' + payout.type + '">' + REWARD_NAMES[payout.type] + '</span></td><td class="muted text-[11px]">' + escapeHTML(payout.note) + '</td><td class="text-right mono text-emerald-300">+' + money(payout.cents) + '</td></tr>').join('') + '</tbody></table></div>';
   } else {
-    $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>订单 / 时间</th><th>下单人</th><th>模拟扣款</th><th>分配详情</th></tr></thead><tbody>' + visible.map(order => '<tr><td class="align-top"><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1 mono">' + order.time + '</span></td><td class="align-top mono">' + escapeHTML(order.buyerId) + '<span class="block text-[10px] muted mt-1">推荐 ' + escapeHTML(order.referrerId) + '</span><span class="reward-tag mt-2 reward-tone-' + (order.zone === 'group' ? 'group' : 'order') + '">' + (order.zone === 'group' ? '拼团区' : '扶持区') + ' · 第 ' + order.position + ' 位</span></td><td class="align-top"><span class="mono">−' + money(order.cents) + '</span><span class="block text-[10px] text-emerald-300 mt-1">模拟支付成功</span></td><td class="align-top"><details><summary class="text-blue-300">奖金 ' + money(order.payouts.reduce((s, p) => s + p.cents, 0)) + ' · 展开</summary><div class="space-y-2 mt-3">' + order.payouts.map(p => '<div class="reward-card reward-tone-' + p.type + ' text-[11px]"><span class="mono font-semibold">' + escapeHTML(p.userId) + '</span> ' + REWARD_NAMES[p.type] + ' <span class="mono">+' + money(p.cents) + '</span><span class="block text-[10px] mt-1 opacity-80">' + escapeHTML(p.note) + '</span></div>').join('') + '</div></details></td></tr>').join('') + '</tbody></table></div>';
+    $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>订单 / 时间</th><th>下单人</th><th>模拟扣款</th><th>分配详情</th></tr></thead><tbody>' + visible.map(order => '<tr><td class="align-top"><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1 mono">' + order.time + '</span></td><td class="align-top mono">' + escapeHTML(order.buyerId) + (order.type === 'repurchase' ? '<span class="block text-[10px] text-amber-200 mt-1">复购 · 恢复邀请资格</span>' : '<span class="block text-[10px] muted mt-1">推荐 ' + escapeHTML(order.referrerId) + '</span><span class="reward-tag mt-2 reward-tone-' + (order.zone === 'group' ? 'group' : 'order') + '">' + (order.zone === 'group' ? '拼团区' : '扶持区') + ' · 第 ' + order.position + ' 位</span>') + '</td><td class="align-top"><span class="mono">−' + money(order.cents) + '</span><span class="block text-[10px] text-emerald-300 mt-1">模拟支付成功</span></td><td class="align-top"><details><summary class="text-blue-300">奖金 ' + money(order.payouts.reduce((s, p) => s + p.cents, 0)) + ' · 展开</summary><div class="space-y-2 mt-3">' + order.payouts.map(p => '<div class="reward-card reward-tone-' + p.type + ' text-[11px]"><span class="mono font-semibold">' + escapeHTML(p.userId) + '</span> ' + REWARD_NAMES[p.type] + ' <span class="mono">+' + money(p.cents) + '</span><span class="block text-[10px] mt-1 opacity-80">' + escapeHTML(p.note) + '</span></div>').join('') + '</div></details></td></tr>').join('') + '</tbody></table></div>';
   }
 }
 
@@ -200,11 +207,12 @@ function updateInvitePreview() {
   $('invite-name').placeholder = generated + '（自动生成）';
   $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
   const position = sim.get(id).children.length + 1;
-  $('invite-reward-preview').textContent = position === 1
-    ? '第 1 位直推进入拼团区：推荐人获得直推奖 39.80 元，不发订单奖。'
-    : position === 2
-      ? '第 2 位直推加入，三人成团：推荐人获得拼团奖 29.85 元 + 成团附加管理奖 2.39 元。'
-      : '第 ' + position + ' 位直推进入扶持区：推荐人获得订单奖 19.90 元，不叠加直推奖或拼团奖。';
+  $('invite-reward-preview').textContent = sim.needsRepurchase(id)
+    ? '该推荐人本轮已满八层，请先切换到此人并复购 199 元，再继续邀请。'
+    : position <= 2
+      ? '第 ' + position + ' 位直推进入拼团区：推荐人获得直推奖 39.80 元，不发订单奖；若补满七人团，团长另获拼团奖 29.85 元和管理奖 2.39 元。'
+      : '第 ' + position + ' 位直推进入扶持区：推荐人获得直推奖 39.80 元 + 订单奖 19.90 元，不触发拼团奖或管理奖。';
+  $('invite-submit').disabled = sim.needsRepurchase(id);
   $('invite-error').hidden = true;
 }
 
@@ -326,11 +334,19 @@ $('tree').addEventListener('click', event => {
   const toggle = event.target.closest('[data-expand]');
   if (toggle) {
     const key = toggle.dataset.expand;
-    expanded.has(key) ? expanded.delete(key) : expanded.add(key);
+    expanded.set(key, toggle.getAttribute('aria-expanded') !== 'true');
     renderTree();
     // 替换 DOM 后恢复键盘焦点。
     $('tree').querySelector('[data-expand="' + toggle.dataset.expand + '"]')?.focus({ preventScroll: true });
   }
+});
+$('collapse-tree').addEventListener('click', () => {
+  for (const id of sim.users.keys()) expanded.set(id, false);
+  renderTree();
+});
+$('expand-tree').addEventListener('click', () => {
+  for (const id of sim.users.keys()) expanded.set(id, true);
+  renderTree();
 });
 $('collapse-rewards').addEventListener('click', () => { expandedRewards.clear(); renderTree(); });
 $('expand-rewards').addEventListener('click', () => {
@@ -361,7 +377,7 @@ $('delete-confirm').addEventListener('click', () => {
     const result = sim.deleteBranch(id);
     if (!sim.get(selectedId)) selectedId = fallback;
     if (!sim.get(viewRoot)) viewRoot = fallback;
-    for (const expandedId of expanded) if (!sim.get(expandedId)) expanded.delete(expandedId);
+    for (const expandedId of expanded.keys()) if (!sim.get(expandedId) || id === ROOT_ID) expanded.delete(expandedId);
     for (const id of expandedRewards) if (!sim.get(id) || pendingDeleteId === ROOT_ID) expandedRewards.delete(id);
     page = 0;
     if (id === ROOT_ID) ledgerMode = 'orders';
@@ -417,6 +433,29 @@ $('invite-form').addEventListener('submit', event => {
     $('invite-error').textContent = error.message;
     $('invite-error').hidden = false;
   } finally { submit.disabled = false; }
+});
+let pendingRepurchaseId = null;
+$('repurchase-open').addEventListener('click', () => {
+  pendingRepurchaseId = selectedId;
+  $('repurchase-description').textContent = selectedId + ' 本轮已满八层。模拟支付 199 元后恢复邀请资格，再延伸八层需再次复购；保留现有团队与收益，本次复购不新增成员、不重复发奖。';
+  $('repurchase-dialog').showModal();
+});
+$('repurchase-cancel').addEventListener('click', () => {
+  pendingRepurchaseId = null;
+  $('repurchase-dialog').close();
+});
+$('repurchase-confirm').addEventListener('click', () => {
+  if (!pendingRepurchaseId || !$('repurchase-dialog').open) return;
+  try {
+    const order = sim.repurchase(pendingRepurchaseId);
+    selectedId = pendingRepurchaseId;
+    pendingRepurchaseId = null;
+    page = 0;
+    ledgerMode = 'orders';
+    $('repurchase-dialog').close();
+    renderAll();
+    showToast(order.buyerId + ' 已复购 199 元，邀请资格已恢复。');
+  } catch (error) { showToast(error.message); }
 });
 $('reset-open').addEventListener('click', () => $('reset-dialog').showModal());
 $('reset-cancel').addEventListener('click', () => $('reset-dialog').close());

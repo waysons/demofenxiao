@@ -4,6 +4,7 @@
 // 所有金额以整数「分」保存；仅显示时转换为元。
 const PRICE = 19900;
 const ROOT_ID = '张三';
+const REPURCHASE_LAYERS = 8;
 const REWARD_NAMES = { direct: '直推奖', group: '拼团奖', order: '订单奖', management: '管理奖' };
 const REWARD_RATES = { direct: 20, group: 15, order: 10, management: 8 };
 
@@ -18,7 +19,7 @@ class Simulation {
 
   makeUser(id, referrerId, depth) {
     return { id, referrerId, depth, children: [],
-      teamSize: 1, groupAwarded: false, spent: 0,
+      teamSize: 1, groupAwarded: false, spent: 0, maxDownlineDepth: 0, renewedDepth: 0,
       wallet: { direct: 0, group: 0, order: 0, management: 0 } };
   }
 
@@ -50,14 +51,39 @@ class Simulation {
     return result;
   }
 
-  // 本人加前两名直推即为三人团，孙辈不参与该账号的成团判断。
+  // 七个席位：本人、前两名直推，以及这两人各自的前两名直推。
   groupProgress(id) {
-    return 1 + Math.min(2, this.get(id).children.length);
+    return 1 + this.get(id).children.slice(0, 2)
+      .reduce((count, childId) => count + 1 + Math.min(2, this.get(childId).children.length), 0);
+  }
+
+  needsRepurchase(id) {
+    const user = this.get(id);
+    return user.maxDownlineDepth - user.renewedDepth >= REPURCHASE_LAYERS;
+  }
+
+  repurchase(id) {
+    if (!this.get(id)) throw new Error('该账号不存在。');
+    if (!this.needsRepurchase(id)) throw new Error('本轮未满八层，无需复购。');
+    return this.recordRepurchase(id);
+  }
+
+  // 删除重算也使用此方法保留真实发生过的模拟复购，不能再次校验当前层数。
+  recordRepurchase(id, renewedDepth = this.get(id).maxDownlineDepth) {
+    const user = this.get(id);
+    const order = { id: this.nextOrderId++, type: 'repurchase', buyerId: id,
+      referrerId: user.referrerId, zone: 'repurchase', cents: PRICE, payouts: [], renewedDepth,
+      time: new Date().toLocaleTimeString('zh-CN', { hour12: false }) };
+    user.spent += PRICE;
+    user.renewedDepth = renewedDepth;
+    this.orders.push(order);
+    return order;
   }
 
   addUser(referrerId, requestedId = '') {
     const referrer = this.get(referrerId);
     if (!referrer) throw new Error('直接推荐人不存在，请重新选择。');
+    if (this.needsRepurchase(referrerId)) throw new Error('本轮已满八层，请先复购 199 元恢复邀请资格。');
     const id = requestedId.trim().toUpperCase() || this.nextName(referrerId);
     if (!/^[A-Z]{1,8}[1-9]\d{0,5}$/.test(id)) {
       throw new Error('账号格式为大写字母组 + 正整数，例如 B1、C12；最多 8 位字母和 6 位数字。');
@@ -77,37 +103,34 @@ class Simulation {
     const [, prefix, suffix] = id.match(/^([A-Z]+)(\d+)$/);
     this.nameCounters.set(prefix, Math.max(this.nameCounters.get(prefix) || 0, Number(suffix)));
 
-    // 团队人数包含本人，成团只看本人和前两名直推。
-    for (const ancestor of referralAncestors) ancestor.teamSize++;
+    // 层数从本人以下第一代计算；扶持区也属于实际推荐关系。
+    for (const ancestor of referralAncestors) {
+      ancestor.teamSize++;
+      ancestor.maxDownlineDepth = Math.max(ancestor.maxDownlineDepth, user.depth - ancestor.depth);
+    }
 
     const pay = (recipient, type, cents, note) => {
       if (cents <= 0) return;
       recipient.wallet[type] += cents;
       order.payouts.push({ userId: recipient.id, type, cents, note });
     };
-    // 第一位为直推奖，第二位为拼团奖，第三位起为订单奖，三者不叠加。
-    if (position === 1) {
-      pay(referrer, 'direct', PRICE * REWARD_RATES.direct / 100, '第 1 位直推 ' + id + ' · 199 × 20%');
-    } else if (position === 2) {
-      const groupBonus = PRICE * REWARD_RATES.group / 100;
-      referrer.groupAwarded = true;
-      pay(referrer, 'group', groupBonus, '第 2 位直推加入，首次完成 1+2 三人团 · 199 × 15%');
-      pay(referrer, 'management', Math.round(groupBonus * REWARD_RATES.management / 100),
-        '成团附加管理奖 · 29.85 × 8%，四舍五入至分');
-    } else {
+    // 每位新直推都有直推奖；扶持区只额外结算订单奖。
+    pay(referrer, 'direct', PRICE * REWARD_RATES.direct / 100,
+      '第 ' + position + ' 位直推 ' + id + ' · 199 × 20%');
+    if (zone === 'support') {
       pay(referrer, 'order', PRICE * REWARD_RATES.order / 100,
         id + ' 为第 ' + position + ' 位直推 · 扶持区订单 199 × 10%');
     }
 
-    // 全部直推祖先等分每单 8%；金额不足整分的尾差从近到远补齐。
-    const pool = referralAncestors.length > 1 ? PRICE * REWARD_RATES.management / 100 : 0;
-    const share = Math.floor(pool / referralAncestors.length);
-    const remainder = pool % referralAncestors.length;
-    referralAncestors.forEach((ancestor, index) => {
-      pay(ancestor, 'management', share + (index < remainder ? 1 : 0),
-        referralAncestors.length + ' 位直推祖先等份共享 199 × 8%' +
-        (remainder ? '，分币尾差从近到远补齐' : ''));
-    });
+    // 补满本人或上一级的七人团时结算，扶持区订单不会补入拼团席位。
+    for (const leader of referralAncestors.slice(0, 2)) {
+      if (zone !== 'group' || leader.groupAwarded || this.groupProgress(leader.id) !== 7) continue;
+      const groupBonus = PRICE * REWARD_RATES.group / 100;
+      leader.groupAwarded = true;
+      pay(leader, 'group', groupBonus, '首次完成 1+2+4 七人团 · 199 × 15%');
+      pay(leader, 'management', Math.round(groupBonus * REWARD_RATES.management / 100),
+        '七人成团管理奖 · 拼团奖 29.85 × 8%，四舍五入至分');
+    }
     this.orders.push(order);
     return order;
   }
@@ -128,7 +151,9 @@ class Simulation {
     // 按保留订单原顺序重放，清除被删订单产生的奖金并重新判断拼团。
     // 重建完成后整体替换，避免删除途中留下不完整状态。
     for (const previous of keptOrders) {
-      const order = rebuilt.addUser(previous.referrerId, previous.buyerId);
+      const order = previous.type === 'repurchase'
+        ? rebuilt.recordRepurchase(previous.buyerId, previous.renewedDepth)
+        : rebuilt.addUser(previous.referrerId, previous.buyerId);
       order.id = previous.id;
       order.time = previous.time;
     }
