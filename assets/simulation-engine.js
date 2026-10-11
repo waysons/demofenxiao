@@ -51,9 +51,10 @@ class Simulation {
     return result;
   }
 
-  // 三个席位：本人和前两名直推；下级小团独立结算。
+  // 七个席位：本人、前两名直推，以及这两人各自的前两名直推。
   groupProgress(id) {
-    return 1 + Math.min(2, this.get(id).children.length);
+    return 1 + this.get(id).children.slice(0, 2)
+      .reduce((count, childId) => count + 1 + Math.min(2, this.get(childId).children.length), 0);
   }
 
   needsRepurchase(id) {
@@ -121,15 +122,20 @@ class Simulation {
         id + ' 为第 ' + position + ' 位直推 · 扶持区订单 199 × 10%');
     }
 
-    // 本人邀齐两名直推即成团；属于上级拼团区时，另给直接上级一笔管理奖。
-    if (position === 2 && !referrer.groupAwarded) {
-      const groupBonus = PRICE * REWARD_RATES.group / 100;
-      referrer.groupAwarded = true;
-      pay(referrer, 'group', groupBonus, '首次邀齐两名直推，完成 1+2 三人团 · 199 × 15%');
+    // 每侧首次邀齐两人，独立给上级发管理奖；每席先四舍五入到分再合计。
+    const groupBonus = PRICE * REWARD_RATES.group / 100;
+    if (position === 2) {
       const parent = this.get(referrer.referrerId);
       if (parent && parent.children.slice(0, 2).includes(referrer.id)) {
-        pay(parent, 'management', Math.round(groupBonus * REWARD_RATES.management / 100),
-          referrer.id + ' 邀齐两名直推成团 · 给直接上级的管理奖 29.85 × 8%，四舍五入至分');
+        pay(parent, 'management', 2 * Math.round(groupBonus * REWARD_RATES.management / 100),
+          referrer.id + ' 邀齐两名直推 · 每席 29.85 × 8% 四舍五入为 2.39 元，两席管理奖合计 4.78 元');
+      }
+    }
+    // 新成员只可能补齐直接推荐人或其上级的七人团，拼团奖每人仅发一次。
+    for (const candidate of referralAncestors.slice(0, 2)) {
+      if (!candidate.groupAwarded && this.groupProgress(candidate.id) === 7) {
+        candidate.groupAwarded = true;
+        pay(candidate, 'group', groupBonus, '首次完成 1+2+4 七人团 · 199 × 15%');
       }
     }
     this.orders.push(order);
