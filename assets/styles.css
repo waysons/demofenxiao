@@ -48,16 +48,17 @@
     .tree li:last-child::before { border-right: 1px solid #3b4f6c; border-radius: 0 7px 0 0; }
     .tree li:first-child::after { border-radius: 7px 0 0 0; }
     .tree li:only-child { padding-top: 0; }
+    .tree li[data-zone="group"]:only-child { padding-top: 28px; }
     .tree li ul::before { content: ''; position: absolute; top: 0; left: 50%; border-left: 1px solid #3b4f6c; height: 28px; }
     .tree li[data-zone="group"]::before, .tree li[data-zone="group"]::after { border-color: #9275c1; }
     .tree li[data-zone="support"]::before, .tree li[data-zone="support"]::after { border-color: #518e83; }
     .edge-label { position: absolute; top: 3px; left: 50%; transform: translateX(-50%); z-index: 3; font-size: 9px; line-height: 15px; padding: 1px 6px; border: 1px solid; border-radius: 5px; white-space: nowrap; pointer-events: none; }
-    .edge-label.edge-group { color: #d1baff; background: #30213f; border-color: #785897; }
     .edge-label.edge-support { color: #91d6c9; background: #15332f; border-color: #386f68; }
     .tree li:only-child > .edge-label { top: -25px; }
     #group-outlines { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
     .group-outline { position: absolute; border: 1.5px dashed #ac85e9; border-radius: 18px; background: #9870df0a; pointer-events: none; }
-    .group-outline-label { position: absolute; left: 12px; bottom: -9px; max-width: calc(100% - 24px); padding: 1px 7px; background: #211b32; color: #d1baff; border-radius: 5px; font-size: 10px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .group-outline-label { position: absolute; left: 50%; top: 3px; transform: translateX(-50%); max-width: calc(100% - 16px); padding: 1px 7px; background: #211b32; color: #d1baff; border-radius: 5px; font-size: 10px; line-height: 16px; white-space: nowrap; }
+    .group-contribution { position: absolute; left: 50%; top: 23px; transform: translateX(-50%); padding: 0 7px; background: #211b32; font-size: 10px; line-height: 16px; white-space: nowrap; }
     .node { display: block; width: 100%; text-align: left; border: 0; border-radius: 10px; background: #142c49; padding: 12px; transition: background .15s; }
     .node:hover { border-color: #73a5ed; background: #1b2b43; }
     .node-card { display: inline-block; width: 154px; position: relative; z-index: 2; vertical-align: top; border: 1px solid #3d6596; border-radius: 11px; background: #142c49; }
@@ -65,10 +66,11 @@
     .node-delete:hover { background: #702e3d; color: #fff; }
     .danger { border: 1px solid #bd5668; background: #95384b; color: #fff; border-radius: 9px; padding: 9px 14px; }
     .danger:hover { background: #ad4258; }
-    .node-reward-toggle { display: block; width: calc(100% - 24px); margin: 0 12px 10px; padding-top: 8px; border: 0; border-top: 1px solid #365a8266; background: transparent; color: #9cc8ff; text-align: left; font-size: 10px; }
-    .node-rewards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 4px; margin: 0 12px 12px; text-align: left; font-size: 9px; }
-    .node-rewards > span { background: transparent; }
-    .node-rewards .mono { display: block; margin-top: 2px; font-size: 10px; }
+    .node-contribution { display: block; margin-top: 4px; font-size: 10px; line-height: 1.7; }
+    .contribution-total { display: block; color: #bfdbfe; }
+    .node-income { font-size: 13px; }
+    .reward-equation { display: block; margin-top: 3px; }
+    .reward-term { display: inline-block; background: transparent; }
     .zone-label { display: block; margin-top: 9px; color: #8092ae; font-size: 9px; }
     .group-zone .zone-label { color: #c4b0f1; }
     .root-zone .zone-label { color: #9bc6ff; }
@@ -86,4 +88,3 @@
     summary { cursor: pointer; }
     @media (max-width: 640px) { .tree { padding: 26px 16px; } th, td { padding: 12px; } .node-card { width: 140px; } }
     @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-  

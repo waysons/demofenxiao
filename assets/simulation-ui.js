@@ -11,7 +11,6 @@ let page = 0;
 let toastTimer;
 const PAGE_SIZE = 12;
 const expanded = new Map();
-const expandedRewards = new Set();
 
 function showToast(message) {
   clearTimeout(toastTimer);
@@ -72,7 +71,8 @@ function renderTree() {
   for (const order of sim.orders) {
     const rewards = contributions.get(order.buyerId) || Object.fromEntries(Object.keys(REWARD_NAMES).map(type => [type, 0]));
     for (const payout of order.payouts) {
-      if (payout.userId === selectedId) rewards[payout.type] += payout.cents;
+      // 拼团奖统一放在团长的拼团区内，节点仅显示其余订单贡献。
+      if (payout.userId === selectedId && payout.type !== 'group') rewards[payout.type] += payout.cents;
     }
     contributions.set(order.buyerId, rewards);
   }
@@ -83,29 +83,30 @@ function renderTree() {
     const selected = id === selectedId;
     const position = depth > 0 ? sim.get(user.referrerId).children.indexOf(id) + 1 : 0;
     const inGroupZone = position === 1 || position === 2;
-    const zoneLabel = position ? (inGroupZone ? '拼团区' : '扶持区') + ' · 第 ' + position + ' 位' : '当前团队顶点';
+    const zoneLabel = position ? (inGroupZone ? '' : '扶持区 · ') + '第 ' + position + ' 位' : '当前团队顶点';
     const zoneClass = position === 0 ? 'root-zone' : inGroupZone ? 'group-zone' : 'other-zone';
     const zone = position === 0 ? 'root' : inGroupZone ? 'group' : 'support';
-    const edgeLabel = position ? '<span class="edge-label edge-' + zone + '">' + (inGroupZone ? '拼团区' : '扶持区') + '</span>' : '';
+    const edgeLabel = position && !inGroupZone ? '<span class="edge-label edge-support">扶持区</span>' : '';
     const deleteLabel = id === ROOT_ID ? '清空全部成员与记录，恢复初始张三' : '删除 ' + id + ' 及全部下级和记录';
     const rewards = selected ? user.wallet : contributions.get(id) || {};
     const total = Object.values(rewards).reduce((sum, cents) => sum + cents, 0);
     const incomeLabel = selected ? '主节点 · 累计收益' : '贡献给 ' + selectedId;
-    const rewardsOpen = expandedRewards.has(id);
+    const rewardTerms = Object.entries(REWARD_NAMES).filter(([type]) => !selected && rewards[type] > 0).map(([type, name]) =>
+      '<span class="reward-term reward-tone-' + type + '">' + name + ' <span class="mono" data-reward="' + type + '">' + money(rewards[type]) + '</span></span>');
     const node = '<div class="node-card ' + (selected ? 'selected' : '') + '"><button type="button" class="node ' + zoneClass + ' ' + (selected ? 'selected' : '') + '" data-user="' + escapeHTML(id) +
       '" aria-pressed="' + selected + '" aria-label="选择 ' + escapeHTML(id) + '，' + sim.role(id) + '，团队 ' + user.teamSize + ' 人，' + escapeHTML(incomeLabel) + ' ' + money(total) + '">' +
       '<span class="flex items-center gap-1.5 pr-6"><strong class="mono text-sm truncate min-w-0" title="' + escapeHTML(id) + '">' + escapeHTML(id) + '</strong><span class="role-badge ' + (user.groupAwarded ? 'leader' : 'ordinary') + '">' + sim.role(id) + '</span></span>' +
       '<span class="zone-label">' + zoneLabel + '</span>' +
       (sim.needsRepurchase(id) ? '<span class="block text-[10px] text-amber-300 mt-1">待复购 · 邀请暂停</span>' : '') +
       '<span class="block text-[10px] muted mt-2.5">团队 <b class="text-slate-300 font-normal mono">' + user.teamSize + '</b> 人 <span class="text-slate-600">/</span> 直推 ' + user.children.length + '</span>' +
-      '<span class="block text-[10px] muted mt-2 break-words">' + escapeHTML(incomeLabel) + '</span><span class="node-income block mono text-sm text-blue-200 mt-1">' + money(total) + '</span></button>' +
-      '<button type="button" class="node-reward-toggle" data-rewards-toggle="' + escapeHTML(id) + '" aria-expanded="' + rewardsOpen + '" aria-controls="node-rewards-' + escapeHTML(id) + '">' + (rewardsOpen ? '收起四奖明细 ▴' : '展开四奖明细 ▾') + '</button>' +
-      '<div class="node-rewards" id="node-rewards-' + escapeHTML(id) + '"' + (rewardsOpen ? '' : ' hidden') + '>' + Object.entries(REWARD_NAMES).map(([type, name]) => '<span class="reward-tone-' + type + '">' + name + '<span class="mono" data-reward="' + type + '">' + money(rewards[type] || 0) + '</span></span>').join('') + '</div>' +
+      '<span class="block text-[10px] muted mt-2 break-words">' + escapeHTML(incomeLabel) + '</span>' +
+      '<span class="node-contribution"><span class="contribution-total">' + (selected ? '总收益 ' : '总贡献 ') + '<span class="node-income mono">' + money(total) + '</span></span>' +
+      (rewardTerms.length ? '<span class="reward-equation"><span class="muted">= </span>' + rewardTerms.join('<span class="muted"> + </span>') + '</span>' : '') + '</span></button>' +
       '<button type="button" class="node-delete" data-delete="' + escapeHTML(id) + '" aria-label="' + escapeHTML(deleteLabel) + '" title="' + escapeHTML(deleteLabel) + '">×</button></div>';
     const toggle = children.length ? '<button class="branch-toggle" data-expand="' + escapeHTML(id) + '" aria-expanded="' + isOpen + '" aria-label="' + (isOpen ? '收起 ' : '展开 ') + escapeHTML(id) + ' 的下级">' + (isOpen ? '收起下级 −' : '展开下级 · ' + children.length + ' 人 ＋') + '</button>' : '';
     return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
   };
-  $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines" aria-hidden="true"></div>';
+  $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines"></div>';
   $('tree-empty').hidden = root.children.length > 0;
   scheduleGroupOutlines();
 }
@@ -128,15 +129,23 @@ function drawGroupOutlines() {
     frame.className = 'group-outline';
     frame.dataset.groupOwner = parent.dataset.node;
     frame.dataset.members = members.map(member => member.dataset.node).join(',');
+    frame.setAttribute('role', 'group');
+    frame.setAttribute('aria-label', parent.dataset.node + ' 的拼团区');
     const label = document.createElement('span');
     label.className = 'group-outline-label';
-    label.textContent = parent.dataset.node + ' 的拼团区';
+    label.textContent = '拼团区';
     frame.append(label);
+    if (parent.dataset.node === selectedId) {
+      const contribution = document.createElement('span');
+      contribution.className = 'group-contribution reward-tone-group';
+      contribution.innerHTML = '拼团奖 <span class="mono" data-reward="group">' + money(sim.get(selectedId).wallet.group) + '</span>';
+      frame.append(contribution);
+    }
     // DOM 矩形包含缩放，需要还原到画布坐标，防止虚线框二次缩放错位。
     frame.style.left = ((left - origin.left) / treePan.scale - 8) + 'px';
-    frame.style.top = ((top - origin.top) / treePan.scale - 8) + 'px';
+    frame.style.top = ((top - origin.top) / treePan.scale - 44) + 'px';
     frame.style.width = ((right - left) / treePan.scale + 16) + 'px';
-    frame.style.height = ((bottom - top) / treePan.scale + 16) + 'px';
+    frame.style.height = ((bottom - top) / treePan.scale + 52) + 'px';
     layer.append(frame);
   });
 }
@@ -252,7 +261,7 @@ function resetTreePan() {
 treeStage.addEventListener('pointerdown', event => {
   if (event.button !== 0 || event.isPrimary === false || treeDrag) return;
   suppressTreeClick = false;
-  if (event.target.closest('[data-delete], [data-rewards-toggle]')) return;
+  if (event.target.closest('[data-delete]')) return;
   treeDrag = { id: event.pointerId, startX: event.clientX, startY: event.clientY,
     originX: treePan.x, originY: treePan.y, moved: false, target: event.target };
   // 捕获在原目标上，轻点节点时仍会正常触发该节点的 click。
@@ -321,14 +330,6 @@ $('operator').addEventListener('change', event => selectUser(event.target.value)
 $('tree').addEventListener('click', event => {
   const remove = event.target.closest('[data-delete]');
   if (remove) { openDeleteDialog(remove.dataset.delete); return; }
-  const rewardsToggle = event.target.closest('[data-rewards-toggle]');
-  if (rewardsToggle) {
-    const id = rewardsToggle.dataset.rewardsToggle;
-    expandedRewards.has(id) ? expandedRewards.delete(id) : expandedRewards.add(id);
-    renderTree();
-    $('tree').querySelector('[data-rewards-toggle="' + id + '"]')?.focus({ preventScroll: true });
-    return;
-  }
   const node = event.target.closest('[data-user]');
   if (node) { selectUser(node.dataset.user); return; }
   const toggle = event.target.closest('[data-expand]');
@@ -346,11 +347,6 @@ $('collapse-tree').addEventListener('click', () => {
 });
 $('expand-tree').addEventListener('click', () => {
   for (const id of sim.users.keys()) expanded.set(id, true);
-  renderTree();
-});
-$('collapse-rewards').addEventListener('click', () => { expandedRewards.clear(); renderTree(); });
-$('expand-rewards').addEventListener('click', () => {
-  for (const id of sim.users.keys()) expandedRewards.add(id);
   renderTree();
 });
 
@@ -378,7 +374,6 @@ $('delete-confirm').addEventListener('click', () => {
     if (!sim.get(selectedId)) selectedId = fallback;
     if (!sim.get(viewRoot)) viewRoot = fallback;
     for (const expandedId of expanded.keys()) if (!sim.get(expandedId) || id === ROOT_ID) expanded.delete(expandedId);
-    for (const id of expandedRewards) if (!sim.get(id) || pendingDeleteId === ROOT_ID) expandedRewards.delete(id);
     page = 0;
     if (id === ROOT_ID) ledgerMode = 'orders';
     pendingDeleteId = null;
@@ -463,7 +458,6 @@ $('reset-confirm').addEventListener('click', () => {
   sim = new Simulation();
   selectedId = viewRoot = ROOT_ID; ledgerMode = 'orders'; page = 0;
   expanded.clear();
-  expandedRewards.clear();
   $('reset-dialog').close();
   renderAll();
   resetTreePan();
