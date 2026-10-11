@@ -49,9 +49,11 @@ function renderUser() {
   for (const type of Object.keys(REWARD_NAMES)) $('reward-' + type).textContent = money(user.wallet[type]);
   const progress = sim.groupProgress(user.id);
   $('user-group-members').textContent = '拼团区：' + [0, 1].map(index => user.children[index] || '第 ' + (index + 1) + ' 位待邀请').join(' / ');
-  $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : progress + ' / 7';
-  $('group-dots').innerHTML = Array.from({ length: 7 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
-  $('group-hint').textContent = user.groupAwarded ? '已发拼团奖 29.85 元 + 管理奖 2.39 元，此团不重复结算。' : '本人 + 前两名直推 + 两人各自的前两名直推，满 7 人才能成为团长。';
+  $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : progress + ' / 3';
+  $('group-dots').innerHTML = Array.from({ length: 3 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
+  const completedGroups = user.children.slice(0, 2).filter(id => sim.get(id).groupAwarded).length;
+  $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 29.85 元，此团不重复结算。' : '本人 + 前两名直推，满 3 人成为团长并获得拼团奖 29.85 元。') +
+    ' 前两名直推已完成 ' + completedGroups + ' / 2 个小团，累计管理奖 ' + money(user.wallet.management) + '；每个小团结算 2.39 元。';
   const expired = sim.needsRepurchase(user.id);
   $('qualification-status').textContent = expired
     ? '本轮已满八层，需复购 199 元恢复邀请资格。'
@@ -216,10 +218,14 @@ function updateInvitePreview() {
   $('invite-name').placeholder = generated + '（自动生成）';
   $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
   const position = sim.get(id).children.length + 1;
+  const parent = sim.get(sim.get(id).referrerId);
+  const managementPreview = position === 2 && parent && parent.children.slice(0, 2).includes(id)
+    ? '；' + parent.id + ' 获得管理奖 2.39 元' : '';
   $('invite-reward-preview').textContent = sim.needsRepurchase(id)
     ? '该推荐人本轮已满八层，请先切换到此人并复购 199 元，再继续邀请。'
     : position <= 2
-      ? '第 ' + position + ' 位直推进入拼团区：推荐人获得直推奖 39.80 元，不发订单奖；若补满七人团，团长另获拼团奖 29.85 元和管理奖 2.39 元。'
+      ? '第 ' + position + ' 位直推进入拼团区：推荐人获得直推奖 39.80 元，不发订单奖' +
+        (position === 2 ? '；本次邀齐两人，推荐人另获拼团奖 29.85 元' : '；再邀请一名直推即可成团') + managementPreview + '。'
       : '第 ' + position + ' 位直推进入扶持区：推荐人获得直推奖 39.80 元 + 订单奖 19.90 元，不触发拼团奖或管理奖。';
   $('invite-submit').disabled = sim.needsRepurchase(id);
   $('invite-error').hidden = true;
