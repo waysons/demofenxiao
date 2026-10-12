@@ -40,7 +40,7 @@ function renderUser() {
   $('user-avatar').textContent = user.id.length > 4 ? user.id.slice(0, 3) + '…' : user.id;
   $('user-name').textContent = user.id;
   $('user-role').textContent = sim.role(user.id);
-  $('user-role').className = 'role-badge ' + (user.groupAwarded ? 'leader' : 'ordinary');
+  $('user-role').className = 'role-badge ' + (sim.role(user.id) === '团长' ? 'leader' : 'ordinary');
   $('user-parent').textContent = '直接推荐人 · ' + (user.referrerId || '无（根节点）');
   $('user-income').textContent = money(sim.income(user.id));
   $('user-spent').textContent = '模拟下单支出 ' + money(user.spent) + (user.id === ROOT_ID ? ' · 初始账号' : ' · 已模拟扣款');
@@ -51,9 +51,9 @@ function renderUser() {
   $('user-group-members').textContent = '拼团区：' + [0, 1].map(index => user.children[index] || '第 ' + (index + 1) + ' 位待邀请').join(' / ');
   $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : progress + ' / 7';
   $('group-dots').innerHTML = Array.from({ length: 7 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
-  const completedSides = user.children.slice(0, 2).filter(id => sim.get(id).children.length >= 2).length;
-  $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 29.85 元，此团不重复结算。' : '本人 + 前两名直推 + 两人各自的前两名直推，满 1+2+4 七人成为团长并获得拼团奖 29.85 元。') +
-    ' 已有 ' + completedSides + ' / 2 名直推邀齐两人，累计管理奖 ' + money(user.wallet.management) + '；每侧结算 4.78 元，两侧合计 9.56 元。';
+  const leaders = user.children.filter(id => sim.role(id) === '团长').length;
+  $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 29.85 元，此团不重复结算。' : '本人 + 前两名直推 + 两人各自的前两名直推，满 1+2+4 七人获得一次拼团奖 29.85 元。') +
+    ' 七人成团且本人直推满三人才成为团长；已有 ' + leaders + ' 名直推成为团长，双方均为团长后，每名直推产生一次管理奖 2.39 元，累计 ' + money(user.wallet.management) + '。';
   const expired = sim.needsRepurchase(user.id);
   $('qualification-status').textContent = expired
     ? '本轮已满八层，需复购 199 元恢复邀请资格。'
@@ -70,11 +70,15 @@ function renderTree() {
   $('contribution-target').textContent = selectedId;
   // 按来源订单统计贡献，不累加分支收益，避免同一笔奖金被多层重复展示。
   const contributions = new Map();
+  const managementContributions = new Map();
   for (const order of sim.orders) {
     const rewards = contributions.get(order.buyerId) || Object.fromEntries(Object.keys(REWARD_NAMES).map(type => [type, 0]));
     for (const payout of order.payouts) {
-      // 拼团奖统一放在团长的拼团区内，节点仅显示其余订单贡献。
-      if (payout.userId === selectedId && payout.type !== 'group') rewards[payout.type] += payout.cents;
+      if (payout.userId !== selectedId) continue;
+      // 拼团奖放在拼团区，管理奖放在产生奖励的直推节点下。
+      if (payout.type === 'management') {
+        managementContributions.set(payout.sourceId, (managementContributions.get(payout.sourceId) || 0) + payout.cents);
+      } else if (payout.type !== 'group') rewards[payout.type] += payout.cents;
     }
     contributions.set(order.buyerId, rewards);
   }
@@ -97,7 +101,7 @@ function renderTree() {
       '<span class="reward-term reward-tone-' + type + '">' + name + ' <span class="mono" data-reward="' + type + '">' + money(rewards[type]) + '</span></span>');
     const node = '<div class="node-card ' + (selected ? 'selected' : '') + '"><button type="button" class="node ' + zoneClass + ' ' + (selected ? 'selected' : '') + '" data-user="' + escapeHTML(id) +
       '" aria-pressed="' + selected + '" aria-label="选择 ' + escapeHTML(id) + '，' + sim.role(id) + '，团队 ' + user.teamSize + ' 人，' + escapeHTML(incomeLabel) + ' ' + money(total) + '">' +
-      '<span class="flex items-center gap-1.5 pr-6"><strong class="mono text-sm truncate min-w-0" title="' + escapeHTML(id) + '">' + escapeHTML(id) + '</strong><span class="role-badge ' + (user.groupAwarded ? 'leader' : 'ordinary') + '">' + sim.role(id) + '</span></span>' +
+      '<span class="flex items-center gap-1.5 pr-6"><strong class="mono text-sm truncate min-w-0" title="' + escapeHTML(id) + '">' + escapeHTML(id) + '</strong><span class="role-badge ' + (sim.role(id) === '团长' ? 'leader' : 'ordinary') + '">' + sim.role(id) + '</span></span>' +
       '<span class="zone-label">' + zoneLabel + '</span>' +
       (sim.needsRepurchase(id) ? '<span class="block text-[10px] text-amber-300 mt-1">待复购 · 邀请暂停</span>' : '') +
       '<span class="block text-[10px] muted mt-2.5">团队 <b class="text-slate-300 font-normal mono">' + user.teamSize + '</b> 人 <span class="text-slate-600">/</span> 直推 ' + user.children.length + '</span>' +
@@ -106,7 +110,11 @@ function renderTree() {
       (rewardTerms.length ? '<span class="reward-equation"><span class="muted">= </span>' + rewardTerms.join('<span class="muted"> + </span>') + '</span>' : '') + '</span></button>' +
       '<button type="button" class="node-delete" data-delete="' + escapeHTML(id) + '" aria-label="' + escapeHTML(deleteLabel) + '" title="' + escapeHTML(deleteLabel) + '">×</button></div>';
     const toggle = children.length ? '<button class="branch-toggle" data-expand="' + escapeHTML(id) + '" aria-expanded="' + isOpen + '" aria-label="' + (isOpen ? '收起 ' : '展开 ') + escapeHTML(id) + ' 的下级">' + (isOpen ? '收起下级 −' : '展开下级 · ' + children.length + ' 人 ＋') + '</button>' : '';
-    return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
+    const management = managementContributions.get(id) || 0;
+    const managementLabel = user.referrerId === selectedId
+      ? '<div class="management-outline reward-tone-management" data-management-source="' + escapeHTML(id) + '">管理奖 <span class="mono" data-reward="management">' + money(management) + '</span><span class="block">' +
+        (management ? '给 ' + escapeHTML(selectedId) + ' · 已结算一次' : '待双方成为团长') + '</span></div>' : '';
+    return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + managementLabel + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
   };
   $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines"></div>';
   $('tree-empty').hidden = root.children.length > 0;
@@ -218,15 +226,12 @@ function updateInvitePreview() {
   $('invite-name').placeholder = generated + '（自动生成）';
   $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
   const position = sim.get(id).children.length + 1;
-  const parent = sim.get(sim.get(id).referrerId);
-  const managementPreview = position === 2 && parent && parent.children.slice(0, 2).includes(id)
-    ? '；' + parent.id + ' 获得管理奖 4.78 元' : '';
   $('invite-reward-preview').textContent = sim.needsRepurchase(id)
     ? '该推荐人本轮已满八层，请先切换到此人并复购 199 元，再继续邀请。'
     : position <= 2
       ? '第 ' + position + ' 位直推进入拼团区：推荐人获得直推奖 39.80 元，不发订单奖' +
-        managementPreview + '；拼团奖须满 1+2+4 七人后结算 29.85 元。'
-      : '第 ' + position + ' 位直推进入扶持区：推荐人获得直推奖 39.80 元 + 订单奖 19.90 元，不触发拼团奖或管理奖。';
+        '；拼团奖满 1+2+4 七人只结算一次 29.85 元；管理奖须上下级均七人成团且各直推满三人，每名直推仅一次 2.39 元。'
+      : '第 ' + position + ' 位直推进入扶持区：推荐人获得直推奖 39.80 元 + 订单奖 19.90 元；直推满三人且七人成团才成为团长，双方均达标才结算一次平级管理奖 2.39 元。';
   $('invite-submit').disabled = sim.needsRepurchase(id);
   $('invite-error').hidden = true;
 }

@@ -59,6 +59,7 @@
     .group-outline { position: absolute; border: 1.5px dashed #ac85e9; border-radius: 18px; background: #9870df0a; pointer-events: none; }
     .group-outline-label { position: absolute; left: 50%; top: 3px; transform: translateX(-50%); max-width: calc(100% - 16px); padding: 1px 7px; background: #211b32; color: #d1baff; border-radius: 5px; font-size: 10px; line-height: 16px; white-space: nowrap; }
     .group-contribution { position: absolute; left: 50%; top: 23px; transform: translateX(-50%); padding: 0 7px; background: #211b32; font-size: 10px; line-height: 16px; white-space: nowrap; }
+    .management-outline { position: relative; z-index: 2; width: 154px; margin: 8px auto 0; padding: 5px 7px; border: 1.5px dashed #ac85e9; border-radius: 10px; font-size: 10px; line-height: 16px; }
     .node { display: block; width: 100%; text-align: left; border: 0; border-radius: 10px; background: #142c49; padding: 12px; transition: background .15s; }
     .node:hover { border-color: #73a5ed; background: #1b2b43; }
     .node-card { display: inline-block; width: 154px; position: relative; z-index: 2; vertical-align: top; border: 1px solid #3d6596; border-radius: 11px; background: #142c49; }

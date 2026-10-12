@@ -19,13 +19,13 @@ class Simulation {
 
   makeUser(id, referrerId, depth) {
     return { id, referrerId, depth, children: [],
-      teamSize: 1, groupAwarded: false, spent: 0, maxDownlineDepth: 0, renewedDepth: 0,
+      teamSize: 1, groupAwarded: false, managementAwarded: false, spent: 0, maxDownlineDepth: 0, renewedDepth: 0,
       wallet: { direct: 0, group: 0, order: 0, management: 0 } };
   }
 
   get(id) { return this.users.get(id); }
   income(id) { return Object.values(this.get(id).wallet).reduce((sum, value) => sum + value, 0); }
-  role(id) { return this.get(id).groupAwarded ? '团长' : '普通'; }
+  role(id) { return this.get(id).groupAwarded && this.get(id).children.length >= 3 ? '团长' : '普通'; }
 
   // 推荐深度决定字母组：A、B…Z、AA、AB…；组内数字全局递增。
   nextName(referrerId) {
@@ -109,10 +109,10 @@ class Simulation {
       ancestor.maxDownlineDepth = Math.max(ancestor.maxDownlineDepth, user.depth - ancestor.depth);
     }
 
-    const pay = (recipient, type, cents, note) => {
+    const pay = (recipient, type, cents, note, sourceId) => {
       if (cents <= 0) return;
       recipient.wallet[type] += cents;
-      order.payouts.push({ userId: recipient.id, type, cents, note });
+      order.payouts.push({ userId: recipient.id, type, cents, note, ...(sourceId ? { sourceId } : {}) });
     };
     // 每位新直推都有直推奖；扶持区只额外结算订单奖。
     pay(referrer, 'direct', PRICE * REWARD_RATES.direct / 100,
@@ -122,20 +122,25 @@ class Simulation {
         id + ' 为第 ' + position + ' 位直推 · 扶持区订单 199 × 10%');
     }
 
-    // 每侧首次邀齐两人，独立给上级发管理奖；每席先四舍五入到分再合计。
     const groupBonus = PRICE * REWARD_RATES.group / 100;
-    if (position === 2) {
-      const parent = this.get(referrer.referrerId);
-      if (parent && parent.children.slice(0, 2).includes(referrer.id)) {
-        pay(parent, 'management', 2 * Math.round(groupBonus * REWARD_RATES.management / 100),
-          referrer.id + ' 邀齐两名直推 · 每席 29.85 × 8% 四舍五入为 2.39 元，两席管理奖合计 4.78 元');
-      }
-    }
     // 新成员只可能补齐直接推荐人或其上级的七人团，拼团奖每人仅发一次。
-    for (const candidate of referralAncestors.slice(0, 2)) {
+    const candidates = referralAncestors.slice(0, 2);
+    for (const candidate of candidates) {
       if (!candidate.groupAwarded && this.groupProgress(candidate.id) === 7) {
         candidate.groupAwarded = true;
         pay(candidate, 'group', groupBonus, '首次完成 1+2+4 七人团 · 199 × 15%');
+      }
+    }
+    // 双方均为团长后，直推的单次拼团奖才给其直接上级产生一次管理奖。
+    // 同时检查新团长的直推，兼容下级先达标、上级后达标的顺序。
+    const sources = new Set(candidates.flatMap(candidate => [candidate.id, ...candidate.children]));
+    for (const sourceId of sources) {
+      const source = this.get(sourceId);
+      const parent = this.get(source.referrerId);
+      if (!source.managementAwarded && parent && this.role(sourceId) === '团长' && this.role(parent.id) === '团长') {
+        source.managementAwarded = true;
+        pay(parent, 'management', Math.round(groupBonus * REWARD_RATES.management / 100),
+          sourceId + ' 与 ' + parent.id + ' 均已七人成团且直推满三人 · 单次拼团奖 29.85 × 8% ≈ 2.39 元，仅结算一次', sourceId);
       }
     }
     this.orders.push(order);
