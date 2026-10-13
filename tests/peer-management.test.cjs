@@ -41,8 +41,12 @@ test('A2 七人成团但未直推三人不发管理奖，补齐第三人后张�
   assert.equal(management(sim)[0].sourceId, a2);
   fill(sim, a2, 2);
   fill(sim, a1, 1);
+  assert.equal(sim.role(a1), '普通');
   assert.equal(sim.get('张三').wallet.management, 239);
-  assert.equal(management(sim).length, 1);
+  sim.get(a1).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+  assert.equal(sim.role(a1), '团长');
+  assert.equal(sim.get('张三').wallet.management, 478);
+  assert.equal(management(sim).length, 2);
 });
 
 test('下级先成为团长时等待上级也达标，A1 和 A2 各只结算一次', () => {
@@ -89,28 +93,32 @@ test('删除第三名直推撤销团长资格及管理奖，保留拼团奖；�
   assert.equal(management(sim).length, 1);
 });
 
-test('先直推三人后补第七席才结算，删除关键席位撤奖，补回及复购不重复发奖', () => {
+test('只直推满三人不发管理奖；双方成团后才结算，八层也不暂停邀请', () => {
   const sim = fresh();
   const [a1] = seven(sim, '张三');
   fill(sim, '张三', 1);
-  fill(sim, a1, 1);
-  const [b1, b2] = sim.get(a1).children;
-  fill(sim, b1, 2);
-  fill(sim, b2, 1);
+  assert.equal(sim.role('张三'), '团长');
   assert.equal(sim.get('张三').wallet.management, 0);
-  const last = sim.addUser(b2);
-  assert.equal(sim.get(a1).wallet.group, 2985);
-  assert.equal(sim.get('张三').wallet.management, 239);
-  assert.equal(last.payouts.find(p => p.type === 'management').sourceId, a1);
-  sim.deleteBranch(last.buyerId);
+  const [third] = fill(sim, a1, 1);
+  assert.equal(sim.role(a1), '普通');
   assert.equal(sim.get(a1).wallet.group, 0);
   assert.equal(sim.get('张三').wallet.management, 0);
-  let tail = sim.addUser(b2).buyerId;
-  for (let i = 0; i < 5; i++) tail = sim.addUser(tail).buyerId;
-  sim.repurchase('张三');
-  fill(sim, '张三', 1);
-  assert.equal(sim.get('张三').wallet.group, 2985);
+  sim.get(a1).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+  assert.equal(sim.role(a1), '团长');
   assert.equal(sim.get(a1).wallet.group, 2985);
   assert.equal(sim.get('张三').wallet.management, 239);
+  sim.deleteBranch(third);
+  assert.equal(sim.role(a1), '普通');
+  assert.equal(sim.get(a1).wallet.group, 2985);
+  assert.equal(sim.get('张三').wallet.management, 0);
+  fill(sim, a1, 1);
+  assert.equal(sim.get('张三').wallet.management, 239);
   assert.equal(management(sim).length, 1);
+  let tail = a1;
+  for (let i = 0; i < 8; i++) tail = sim.addUser(tail).buyerId;
+  assert.equal(sim.needsRepurchase('张三'), false);
+  assert.throws(() => sim.repurchase('张三'), /无需复购/);
+  sim.addUser('张三');
+  assert.equal(sim.get('张三').wallet.group, 2985);
+  assert.equal(sim.get('张三').wallet.management, 239);
 });

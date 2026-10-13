@@ -22,12 +22,16 @@
     .stat-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: #182740; color: #80acff; }
     .reward-dot { width: 7px; height: 7px; display: inline-block; border-radius: 50%; margin-right: 7px; }
     .direct { background: #65a2ff; } .group { background: #e5b873; } .order { background: #4bc5bf; } .management { background: #a78bfa; }
+    .agent_county { background: #f0a35e; } .agent_city { background: #f0784a; } .agent_province { background: #e35d6a; }
     .reward-card { border: 1px solid; border-radius: 10px; padding: 10px; }
     .reward-tag { display: inline-block; border: 1px solid; border-radius: 6px; padding: 3px 7px; font-size: 10px; }
     .reward-tone-direct { color: #9cc8ff; background: #19335466; border-color: #365a82; }
     .reward-tone-group { color: #f1d095; background: #45331b66; border-color: #705733; }
     .reward-tone-order { color: #88e2d8; background: #133d3a66; border-color: #30655e; }
     .reward-tone-management { color: #cfb8ff; background: #35245366; border-color: #614882; }
+    .reward-tone-agent_county { color: #f6c89a; background: #4a301866; border-color: #8a5a32; }
+    .reward-tone-agent_city { color: #f7b39a; background: #4a241866; border-color: #8a4632; }
+    .reward-tone-agent_province { color: #f5a8b0; background: #4a1c2466; border-color: #8a3a44; }
     .role-badge { display: inline-block; flex-shrink: 0; border: 1px solid; border-radius: 5px; padding: 2px 5px; font-size: 9px; line-height: 14px; }
     .role-badge.ordinary { color: #9facbf; background: #263145; border-color: #3a4760; }
     .role-badge.leader { color: #f1d095; background: #493b22; border-color: #806735; }

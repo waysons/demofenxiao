@@ -26,14 +26,14 @@
     </header>
 
     <section class="pt-7 pb-6 flex flex-wrap items-end justify-between gap-4">
-      <div><p class="eyebrow mb-2">NETWORK SIMULATOR / 01</p><h1 class="text-2xl sm:text-[29px] font-semibold tracking-tight">让每一笔分配，都清晰可见。</h1><p class="muted text-xs sm:text-sm mt-2">邀请成员，查看直推关系，实时观察四大奖金的流转。</p></div>
+      <div><p class="eyebrow mb-2">NETWORK SIMULATOR / 01</p><h1 class="text-2xl sm:text-[29px] font-semibold tracking-tight">让每一笔分配，都清晰可见。</h1><p class="muted text-xs sm:text-sm mt-2">按当前后端结算规则邀请成员，观察直推、拼团、订单奖、管理奖和代理奖。</p></div>
       <div class="rounded-xl border border-slate-700/70 bg-slate-800/40 px-4 py-3 flex items-center gap-4"><span class="text-xs muted">统一商品单价</span><span class="mono text-xl font-semibold">¥199<span class="text-xs muted font-normal">.00</span></span></div>
     </section>
 
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6" aria-label="系统统计">
       <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">系统成员</span><span class="stat-icon" aria-hidden="true">◎</span></div><div class="mt-2 flex items-baseline gap-2"><strong id="stat-users" class="mono text-2xl font-semibold">1</strong><span class="text-xs muted">人</span></div><p class="text-[10px] text-slate-500 mt-2">含初始账号张三</p></div>
       <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">模拟订单金额</span><span class="stat-icon" aria-hidden="true">↗</span></div><strong id="stat-sales" class="mono block mt-2 text-2xl font-semibold">¥0.00</strong><p id="stat-orders" class="text-[10px] text-slate-500 mt-2">0 笔已结算订单</p></div>
-      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">累计发放奖金</span><span class="stat-icon" aria-hidden="true">＋</span></div><strong id="stat-bonus" class="mono block mt-2 text-2xl font-semibold text-blue-300">¥0.00</strong><p class="text-[10px] text-slate-500 mt-2">四类奖金合计</p></div>
+      <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">累计发放奖金</span><span class="stat-icon" aria-hidden="true">＋</span></div><strong id="stat-bonus" class="mono block mt-2 text-2xl font-semibold text-blue-300">¥0.00</strong><p class="text-[10px] text-slate-500 mt-2">直推、拼团、订单、管理、代理合计</p></div>
       <div class="panel px-4 sm:px-5 py-4"><div class="flex justify-between items-center"><span class="text-xs muted">成功拼团</span><span class="stat-icon" aria-hidden="true">◇</span></div><div class="mt-2 flex items-baseline gap-2"><strong id="stat-groups" class="mono text-2xl font-semibold">0</strong><span class="text-xs muted">团</span></div><p class="text-[10px] text-slate-500 mt-2">每位成员首次成团计一次</p></div>
     </section>
 
@@ -46,16 +46,25 @@
           <div class="flex items-center gap-3 mt-6"><div id="user-avatar" class="mono flex items-center justify-center w-12 h-12 rounded-xl border border-blue-500/40 bg-blue-500/10 text-blue-200 font-semibold">张三</div><div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 id="user-name" class="text-lg font-semibold break-all">张三</h3><span id="user-role" class="role-badge ordinary">普通</span></div><p id="user-parent" class="muted text-[11px] mt-1">直接推荐人 · 无（根节点）</p></div></div>
           <div class="mt-5"><div class="text-xs muted">累计总收益</div><div id="user-income" class="mono text-[32px] font-semibold tracking-tight mt-1 text-white">¥0.00</div><div id="user-spent" class="text-[10px] muted mt-1">模拟下单支出 ¥0.00</div></div>
           <div class="grid grid-cols-2 gap-3 mt-5 pb-5 border-b border-slate-700/60"><div><p class="text-[11px] muted">直推人数</p><p class="mt-1"><strong id="user-direct" class="mono text-lg font-semibold">0</strong><span class="text-[10px] muted ml-1">人</span></p></div><div class="pl-4 border-l border-slate-700/60"><p class="text-[11px] muted">团队总人数<span class="text-[9px] text-slate-500 ml-1">含本人</span></p><p class="mt-1"><strong id="user-team" class="mono text-lg font-semibold">1</strong><span class="text-[10px] muted ml-1">人</span></p></div></div>
-          <div class="grid grid-cols-2 gap-x-4 gap-y-4 py-5" aria-label="四类奖金">
+          <label for="agent-level" class="text-xs muted block mb-2">当前成员的代理等级 <span class="text-[10px] text-slate-500">之后的新订单才按此结算</span></label>
+          <select id="agent-level" class="field mb-4" aria-label="代理等级">
+            <option value="">无</option>
+            <option value="county">县级代理 · 3%</option>
+            <option value="city">市级代理 · 6%</option>
+            <option value="province">省级代理 · 9%</option>
+          </select>
+          <div class="grid grid-cols-2 gap-x-4 gap-y-4 py-5" aria-label="奖金">
             <div class="reward-card reward-tone-direct"><p class="text-[11px]"><i class="reward-dot direct"></i>直推奖 <span data-reward-rate="direct" class="text-xs font-semibold">20%</span></p><p id="reward-direct" class="mono text-sm mt-1.5">¥0.00</p></div>
             <div class="reward-card reward-tone-group"><p class="text-[11px]"><i class="reward-dot group"></i>拼团奖 <span data-reward-rate="group" class="text-xs font-semibold">15%</span></p><p id="reward-group" class="mono text-sm mt-1.5">¥0.00</p></div>
             <div class="reward-card reward-tone-order"><p class="text-[11px]"><i class="reward-dot order"></i>订单奖 <span data-reward-rate="order" class="text-xs font-semibold">10%</span></p><p id="reward-order" class="mono text-sm mt-1.5">¥0.00</p></div>
             <div class="reward-card reward-tone-management"><p class="text-[11px]"><i class="reward-dot management"></i>管理奖 <span data-reward-rate="management" class="text-xs font-semibold">8%</span></p><p id="reward-management" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-agent_county"><p class="text-[11px]"><i class="reward-dot agent_county"></i>县级代理 <span data-reward-rate="agent_county" class="text-xs font-semibold">3%</span></p><p id="reward-agent_county" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-agent_city"><p class="text-[11px]"><i class="reward-dot agent_city"></i>市级代理 <span data-reward-rate="agent_city" class="text-xs font-semibold">6%</span></p><p id="reward-agent_city" class="mono text-sm mt-1.5">¥0.00</p></div>
+            <div class="reward-card reward-tone-agent_province col-span-2"><p class="text-[11px]"><i class="reward-dot agent_province"></i>省级代理 <span data-reward-rate="agent_province" class="text-xs font-semibold">9%</span></p><p id="reward-agent_province" class="mono text-sm mt-1.5">¥0.00</p></div>
           </div>
-          <p class="text-[10px] muted -mt-1 mb-4 leading-relaxed">每位直推均有 20% 直推奖；扶持区额外发订单奖。七人拼团奖每人只发一次；七人成团且直推满三人才成为团长，双方均为团长后，每名直推给本人产生一次 2.39 元管理奖。</p>
-          <div class="rounded-xl bg-slate-950/30 border border-slate-700/40 p-3.5"><div class="flex justify-between text-[11px]"><span class="muted">1 + 2 + 4 七人成团进度</span><span id="group-status" class="text-blue-300">1 / 7</span></div><p id="user-group-members" class="text-[10px] text-violet-300 mt-2.5 break-words"></p><div id="group-dots" class="flex justify-center gap-2 mt-3" aria-hidden="true"></div><p id="group-hint" class="text-[10px] muted mt-2.5 leading-relaxed">本人、前两名直推及两人各自的前两名直推到齐，满七人获得一次拼团奖；另须直推满三人才成为团长。</p></div>
+          <p class="text-[10px] muted -mt-1 mb-4 leading-relaxed">每位直推都有 20% 直推奖。七人团只计本人和前两名直推的整棵下级树，满 7 人发一次 15% 拼团奖。直推满 3 人且七人团已满才是团长。订单奖只在某人邀到第 2 名直推时，向上最多 8 层发给扶持区分支。</p>
+          <div class="rounded-xl bg-slate-950/30 border border-slate-700/40 p-3.5"><div class="flex justify-between text-[11px]"><span class="muted">七人团进度</span><span id="group-status" class="text-blue-300">1 / 7</span></div><p id="user-group-members" class="text-[10px] text-violet-300 mt-2.5 break-words"></p><div id="group-dots" class="flex justify-center gap-2 mt-3" aria-hidden="true"></div><p id="group-hint" class="text-[10px] muted mt-2.5 leading-relaxed">本人 + 前两名直推的整棵下级树满 7 人，获得一次拼团奖。再有第 3 名直推才成为团长。</p></div>
           <p id="qualification-status" class="text-[11px] text-amber-200 mt-4" role="status"></p>
-          <button id="repurchase-open" class="primary w-full mt-3" hidden>复购 ¥199 · 恢复邀请</button>
           <button id="invite-open" class="primary w-full mt-5 flex items-center justify-center gap-2"><span class="text-lg leading-none" aria-hidden="true">＋</span> 新增下线 / 邀请人</button>
           <p class="text-[10px] text-slate-500 text-center mt-2.5">每次新增自动模拟支付 199 元并结算</p>
         </section>
@@ -64,15 +73,16 @@
           <summary class="text-slate-300 font-medium">结算规则与口径 <span class="text-[10px] text-slate-500 ml-1">点击展开</span></summary>
           <div class="muted mt-4 space-y-3 leading-relaxed">
             <p><strong class="text-slate-300">初始成员与命名：</strong>系统从“张三”开始，张三没有初始订单。张三的直推依次为 A1、A2、A3…；下一代为 B1、B2…，再往后为 C、D 等字母组，Z 后延续 AA。同代数字全局递增。</p>
-            <p><strong class="text-slate-300">拼团区与扶持区：</strong>对每个推荐人分别统计邀请顺序：第 1、2 位为拼团区，第 3 位起为扶持区。以实际邀请顺序为准，自定义账号名称不改变分区。紫色虚线框只圈出该推荐人的前两名直推。</p>
-            <p><strong class="text-slate-300">下单与身份：</strong>两区新增成员都生成一笔 199 元模拟支付订单。本人、前两名直推及两人各自的前两名直推到齐，组成 1+2+4 共 7 人，获得一次拼团奖；同时本人直推满 3 人才成为“团长”，否则显示“普通”。每位成员独立判断，单侧多邀或扶持区成员不能替代缺席。</p>
-            <p><strong class="text-slate-300">直推奖 20%：</strong>每邀请一名新成员下单，直接推荐人均获得 199 × 20% = 39.80 元，不限第几位直推，拼团区与扶持区都适用。</p>
-            <p><strong class="text-slate-300">拼团奖 15%：</strong>首次满足七人成团时，本人获得 199 × 15% = 29.85 元，每人仅结算一次。例如张三邀请 A1、A2，A1 邀齐 B1/B2，A2 邀齐 B3/B4，张三加下方 6 笔订单到齐，只给张三发一次拼团奖，不按六笔订单重复发放。</p>
-            <p><strong class="text-slate-300">订单奖 10%：</strong>第 3 位及之后的直推属于扶持区，每笔向直接推荐人额外发放 199 × 10% = 19.90 元，与直推奖合计 59.70 元。扶持区不补七人席位；第三名直推可补齐团长的直推人数条件。该成员自己邀请的前两位仍属于其自己的拼团区。</p>
-            <p><strong class="text-slate-300">管理奖 8%：</strong>仅在本人和直接推荐的成员均成为团长后，给本人结算该直推单次拼团奖的 8%：29.85 × 8% = 2.388 元，四舍五入为 2.39 元，每名直推仅一次，不向更高层分摊。例如 A2 必须直推满 3 人，且 B3/B4 各自推荐两人补齐 A2 的七人团；张三也为团长时才获得 A2 的管理奖。A2 未直推满 3 人不能产生管理奖。双方谁先达标均可，待另一方也达标时结算。所有直推均按此资格判断。</p>
-            <p><strong class="text-slate-300">八层复购：</strong>每位成员从本人以下第一代计算，团队最深到达八代时暂停该成员的新增邀请；其余未到期成员仍可邀请。复购 199 元恢复邀请资格，以复购时的最深层数为新起点，再延伸八层需再次复购。复购保留原团队、团长身份和收益，仅记录模拟支出，不新增成员或重复发奖。</p>
-            <p><strong class="text-slate-300">节点收益视角：</strong>选中的节点为收益主节点，显示其累计收益；其他节点显示自己订单贡献的直推奖和订单奖，不合并下级贡献。拼团奖单独显示在主节点的拼团区虚线框内；管理奖显示在对应直推节点下的虚线框中，例如 A2 给张三产生的管理奖显示在 A2 下方。节点订单贡献、拼团奖与管理奖之和等于主节点总收益，无入账记录显示 0 元。切换选择只改变显示，不改变奖金结算。</p>
-            <p><strong class="text-slate-300">删除与重算：</strong>红叉删除当前节点、全部下级和相关订单；再按保留订单的原始顺序重算分区、四类奖金及普通/团长身份。若原扶持区成员重排进入前两位，对应订单奖会撤销。张三的红叉清空全部记录并恢复初始张三。</p>
+            <p><strong class="text-slate-300">拼团区与扶持区：</strong>邀请顺序不换位。第 1、2 名直推是左右位，第 3 名起是扶持区。紫色虚线框只标出前两名直推。席位按邀请先后固定。</p>
+            <p><strong class="text-slate-300">七人团与团长：</strong>每人的七人团 = 本人 + 前两名直推各自整棵下级树里的已入团成员。本人第 3 名及以后的分支不计入本人的团，但会计入更上级、只要他们落在那位上级的前两枝里面。第一次满 7 人发一次拼团奖。团长要同时满足：七人团已满，并且直推至少 3 人。</p>
+            <p><strong class="text-slate-300">直推奖 20%：</strong>每邀请一名新成员，直接推荐人获得实付 × 20%。按 199 元计算是 39.80 元。左右位和扶持区都有，不限第几位。</p>
+            <p><strong class="text-slate-300">拼团奖 15%：</strong>七人团人数第一次达到 7 时，给这位成员实付 × 15%，按 199 元是 29.85 元，只发一次。触发成团的是哪一笔订单，就按那一笔的实付计算。</p>
+            <p><strong class="text-slate-300">订单奖 10%：</strong>某位成员的已支付直推从 1 人变成 2 人时才触发。从该成员的直接上级向上最多查 8 层：这条链落在某上级的第 3 名及以后分支时，给该上级实付 × 10%；落在左右位则跳过并继续向上。若这笔订单付款前，该上级或对应的分支根已经是团长，查找就此停止。第 3 名直推下单的当时并不单独发订单奖。</p>
+            <p><strong class="text-slate-300">管理奖 8%：</strong>某名直推和其直接上级都已成为团长，并且这名直推已经拿到过拼团奖，才给直接上级结算一次：该直推拼团奖 × 8%。29.85 × 8% = 2.388 元，四舍五入为 2.39 元。下级先达标会等到上级也达标。不向更高层分摊。只直推满 3 人、七人团还没满，不发管理奖。</p>
+            <p><strong class="text-slate-300">代理奖：</strong>把成员设为县 / 市 / 省代理后，之后每笔下级订单按实付的 3% / 6% / 9% 发给该成员。已结算的旧订单不改。删除分支重算时，按每笔订单当时的等级重放。</p>
+            <p><strong class="text-slate-300">八层：</strong>只限制订单奖向上查找的层数，不暂停邀请，也不需要复购。</p>
+            <p><strong class="text-slate-300">节点收益视角：</strong>选中的节点显示累计收益。其他节点显示自己那笔订单贡献给主节点的直推奖、订单奖和代理奖。拼团奖在主节点的拼团区虚线框内。管理奖在对应直推节点下方。切换选择只改变显示。</p>
+            <p><strong class="text-slate-300">删除与重算：</strong>红叉删除当前节点、全部下级和相关订单，再按保留订单的原始顺序重算席位和奖金。张三的红叉清空全部记录并恢复初始张三。</p>
             <p><strong class="text-slate-300">模拟边界：</strong>所有数据仅保存在本页内存中，刷新即重置。199 元支付为模拟支出，不发生真实扣款，也不从奖金账户抵扣。</p>
           </div>
         </details>
@@ -80,7 +90,7 @@
 
       <div class="space-y-5 min-w-0">
         <section class="panel overflow-hidden" aria-label="关系树">
-          <div class="p-5 border-b border-slate-700/60"><div class="flex flex-wrap items-center justify-between gap-2"><h2 id="tree-title" class="font-semibold text-sm">直推关系树</h2><div class="flex gap-2" role="group" aria-label="关系树分支"><button id="collapse-tree" class="secondary text-[10px] !py-1.5">收起全部分支</button><button id="expand-tree" class="secondary text-[10px] !py-1.5">展开全部分支</button></div></div><p id="tree-description" class="text-[11px] muted mt-1.5">所有有下级的节点都可收起或展开，包括根节点；按住拖动，滚轮或 ＋/− 缩放。拼团奖显示在拼团区虚线框内，管理奖显示在对应直推节点下的虚线框中。</p><p class="text-[11px] text-blue-200 mt-2">收益主节点：<strong id="contribution-target">张三</strong> · 节点显示订单贡献；拼团奖在拼团区，管理奖在对应直推节点下方</p></div>
+          <div class="p-5 border-b border-slate-700/60"><div class="flex flex-wrap items-center justify-between gap-2"><h2 id="tree-title" class="font-semibold text-sm">直推关系树</h2><div class="flex gap-2" role="group" aria-label="关系树分支"><button id="collapse-tree" class="secondary text-[10px] !py-1.5">收起全部分支</button><button id="expand-tree" class="secondary text-[10px] !py-1.5">展开全部分支</button></div></div><p id="tree-description" class="text-[11px] muted mt-1.5">席位按邀请顺序固定，不自动换位。拼团奖在前两名直推的虚线框内，管理奖在对应直推节点下方。</p><p class="text-[11px] text-blue-200 mt-2">收益主节点：<strong id="contribution-target">张三</strong> · 节点显示该订单贡献的直推、订单和代理奖</p></div>
           <div class="px-5 py-3 flex flex-wrap items-center justify-between gap-2 border-b border-slate-800"><p class="text-[11px] muted">视图根节点 <strong id="view-root" class="mono text-slate-200 ml-1">张三</strong><span id="tree-count" class="text-slate-500 ml-3">1 位成员</span></p><div class="flex flex-wrap items-center gap-2"><div class="flex items-center gap-1" role="group" aria-label="关系树缩放"><button id="zoom-out" class="secondary text-xs !px-2 !py-1.5" aria-label="缩小关系树">−</button><button id="zoom-reset" class="secondary mono text-[10px] !px-2 !py-1.5" aria-label="重置为 100% 并居中" title="重置为 100% 并居中">100%</button><button id="zoom-in" class="secondary text-xs !px-2 !py-1.5" aria-label="放大关系树">＋</button></div><button id="center-tree" class="secondary text-[10px] !py-1.5" title="将当前团队顶点恢复到画布中央">居中</button><button id="focus-tree" class="text-[11px] text-blue-300 hover:text-blue-200 px-2 py-1">查看所选团队 ↗</button><button id="root-tree" class="secondary text-[10px] !py-1.5" hidden>返回全图</button></div></div>
           <div id="tree-stage" class="tree-stage" role="region" aria-labelledby="tree-title" aria-description="拖动平移画布，滚轮缩放，点击节点切换收益主节点。聚焦画布后可用方向键平移、加减键缩放、Home 键居中。" tabindex="0"><div id="tree-canvas" class="tree-canvas"><div id="tree" class="tree"></div><div id="tree-empty" class="text-center px-5 pb-9"><div class="w-px h-6 bg-slate-600 mx-auto -mt-5 mb-4"></div><div class="inline-block rounded-xl border border-dashed border-slate-600/70 px-8 py-5 bg-slate-900/30"><div class="text-sm text-slate-300">网络，从第一位伙伴开始</div><p class="text-[11px] muted mt-2">点击左侧「新增下线」，观察订单与奖金如何流转。</p></div></div></div></div>
           <div class="flex flex-wrap justify-between gap-2 px-5 py-3 border-t border-slate-700/60 text-[10px] muted"><span>缩放 35%–200% · 亮框为收益主节点 · 红叉删除分支及记录</span><span><span class="text-blue-300">蓝色节点</span> · <span class="text-violet-300">紫线：拼团区</span> · <span class="text-teal-300">青绿线：扶持区</span></span></div>
@@ -108,12 +118,11 @@
     </form>
   </dialog>
 
-  <dialog id="repurchase-dialog" aria-labelledby="repurchase-title"><h2 id="repurchase-title" class="text-lg font-semibold">复购并恢复邀请资格</h2><p id="repurchase-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3">仅记录模拟支出，不发生真实扣款。</p><div class="flex justify-end gap-3 mt-6"><button id="repurchase-cancel" class="secondary">取消</button><button id="repurchase-confirm" class="primary !py-2">确认模拟复购 ¥199</button></div></dialog>
   <dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title" class="text-lg font-semibold">重新开始模拟？</h2><p class="text-sm muted mt-3 leading-relaxed">本页现有成员、订单及奖金记录将清空，恢复为初始账号张三。</p><div class="flex justify-end gap-3 mt-6"><button id="reset-cancel" class="secondary">保留数据</button><button id="reset-confirm" class="primary !py-2">确认重置</button></div></dialog>
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title" class="text-lg font-semibold text-rose-200">删除节点与记录</h2><p id="delete-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3 leading-relaxed">剩余订单将按原始顺序重新结算，收益和拼团状态同步更新，拼团区按保留的邀请顺序重新编号。</p><p id="delete-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p><div class="flex justify-end gap-3 mt-6"><button id="delete-cancel" class="secondary">取消</button><button id="delete-confirm" class="danger">删除分支与记录</button></div></dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p style="padding:24px;color:#fda4af">此模拟器需要启用 JavaScript 才能运行。</p></noscript>
-<script id="simulation-engine" src="./assets/simulation-engine.js?v=20261012-peer-management" defer></script>
-<script id="simulation-ui" src="./assets/simulation-ui.js?v=20261012-peer-management" defer></script>
+<script id="simulation-engine" src="./assets/simulation-engine.js?v=20261013-backend-rules" defer></script>
+<script id="simulation-ui" src="./assets/simulation-ui.js?v=20261013-backend-rules-2" defer></script>
 </body>
 </html>
