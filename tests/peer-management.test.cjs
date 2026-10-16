@@ -17,7 +17,7 @@ const management = sim => sim.orders.flatMap(order => order.payouts).filter(p =>
 test('本人加六人成团只发一次拼团奖，直推第三人才成为团长', () => {
   const sim = fresh();
   seven(sim, '张三');
-  assert.equal(sim.orders.length, 6);
+  assert.equal(sim.orders.length, 7);
   assert.equal(sim.get('张三').wallet.group, 2985);
   assert.equal(sim.get('张三').wallet.management, 0);
   assert.equal(sim.role('张三'), '普通');
@@ -31,7 +31,7 @@ test('A2 七人成团但未直推三人不发管理奖，补齐第三人后张�
   const sim = fresh();
   const [a1, a2] = seven(sim, '张三');
   fill(sim, '张三', 1);
-  for (const child of sim.get(a2).children) fill(sim, child, 2);
+  for (const child of sim.realChildren(a2)) fill(sim, child, 2);
   assert.equal(sim.get(a2).wallet.group, 2985);
   assert.equal(sim.role(a2), '普通');
   assert.equal(sim.get('张三').wallet.management, 0);
@@ -41,9 +41,9 @@ test('A2 七人成团但未直推三人不发管理奖，补齐第三人后张�
   assert.equal(management(sim)[0].sourceId, a2);
   fill(sim, a2, 2);
   fill(sim, a1, 1);
-  assert.equal(sim.role(a1), '普通');
+  assert.equal(sim.role(a1), '团长');
   assert.equal(sim.get('张三').wallet.management, 239);
-  sim.get(a1).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+  sim.realChildren(a1).slice(0, 2).forEach(id => fill(sim, id, 2));
   assert.equal(sim.role(a1), '团长');
   assert.equal(sim.get('张三').wallet.management, 478);
   assert.equal(management(sim).length, 2);
@@ -54,7 +54,7 @@ test('下级先成为团长时等待上级也达标，A1 和 A2 各只结算一�
   const children = seven(sim, '张三');
   for (const child of children) {
     fill(sim, child, 1);
-    sim.get(child).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+    sim.realChildren(child).slice(0, 2).forEach(id => fill(sim, id, 2));
   }
   assert.equal(sim.get('张三').wallet.management, 0);
   fill(sim, '张三', 1);
@@ -72,7 +72,7 @@ test('第三名直推成为平级团长也可发管理奖，深层团长不越�
   fill(sim, a3, 1);
   assert.equal(sim.get('张三').wallet.management, 239);
   fill(sim, b1, 1);
-  sim.get(b1).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+  sim.realChildren(b1).slice(0, 2).forEach(id => fill(sim, id, 2));
   assert.equal(sim.get(a3).wallet.management, 239);
   assert.equal(sim.get('张三').wallet.management, 239);
 });
@@ -81,7 +81,7 @@ test('删除第三名直推撤销团长资格及管理奖，保留拼团奖；�
   const sim = fresh();
   const [a1] = seven(sim, '张三');
   fill(sim, '张三', 1);
-  sim.get(a1).children.forEach(id => fill(sim, id, 2));
+  sim.realChildren(a1).forEach(id => fill(sim, id, 2));
   const [third] = fill(sim, a1, 1);
   assert.equal(sim.get('张三').wallet.management, 239);
   sim.deleteBranch(third);
@@ -100,10 +100,10 @@ test('只直推满三人不发管理奖；双方成团后才结算，八层也�
   assert.equal(sim.role('张三'), '团长');
   assert.equal(sim.get('张三').wallet.management, 0);
   const [third] = fill(sim, a1, 1);
-  assert.equal(sim.role(a1), '普通');
+  assert.equal(sim.role(a1), '团长');
   assert.equal(sim.get(a1).wallet.group, 0);
   assert.equal(sim.get('张三').wallet.management, 0);
-  sim.get(a1).children.slice(0, 2).forEach(id => fill(sim, id, 2));
+  sim.realChildren(a1).slice(0, 2).forEach(id => fill(sim, id, 2));
   assert.equal(sim.role(a1), '团长');
   assert.equal(sim.get(a1).wallet.group, 2985);
   assert.equal(sim.get('张三').wallet.management, 239);
@@ -121,4 +121,14 @@ test('只直推满三人不发管理奖；双方成团后才结算，八层也�
   sim.addUser('张三');
   assert.equal(sim.get('张三').wallet.group, 2985);
   assert.equal(sim.get('张三').wallet.management, 239);
+});
+
+test('直推满 3 人即为团长，无需自身七人成团', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'A1');
+  sim.addUser('张三', 'A2');
+  assert.equal(sim.role('张三'), '普通');
+  sim.addUser('张三', 'A3');
+  assert.equal(sim.role('张三'), '团长');
+  assert.ok(sim.groupProgress('张三') < 7);
 });
