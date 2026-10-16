@@ -31,7 +31,7 @@ class Simulation {
 
   makeUser(id, referrerId, depth) {
     return {
-      id, userId: id, referrerId, depth, round: 1, children: [], agentLevel: '',
+      id, userId: id, referrerId, depth, round: 1, children: [], markedChildren: [], agentLevel: '',
       reentry: false, exited: false, reentered: false,
       joined: false, joinedAt: null, marketMarked: false, marketMarkedAt: null,
       teamSize: 1, groupAwarded: false, groupBonusCents: 0, managementAwarded: false,
@@ -263,7 +263,7 @@ class Simulation {
     }
   }
 
-  addUser(referrerId, requestedId = '') {
+  _resolveInviteId(referrerId, requestedId) {
     const referrer = this.get(referrerId);
     if (!referrer) throw new Error('直接推荐人不存在，请重新选择。');
     if (referrer.reentry) throw new Error('复投点不能再邀请下级。');
@@ -272,6 +272,57 @@ class Simulation {
       throw new Error('账号格式为大写字母组 + 正整数，例如 B1、C12；最多 8 位字母和 6 位数字。');
     }
     if (this.users.has(id)) throw new Error('该账号已存在，请使用其他名称。');
+    return { referrer, id };
+  }
+
+  addMarkedUser(referrerId, requestedId = '') {
+    const { referrer, id } = this._resolveInviteId(referrerId, requestedId);
+    const user = this.makeUser(id, referrerId, referrer.depth + 1);
+    user.marketMarked = true;
+    user.marketMarkedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
+    referrer.markedChildren.push(id);
+    this.users.set(id, user);
+    const [, prefix, suffix] = id.match(/^([A-Z]+)(\d+)$/);
+    this.nameCounters.set(prefix, Math.max(this.nameCounters.get(prefix) || 0, Number(suffix)));
+    return user;
+  }
+
+  clearMarketMark(id) {
+    const user = this.get(id);
+    if (!user) throw new Error('该账号不存在。');
+    if (!user.marketMarked) throw new Error('该节点未仅标记。');
+    const parent = user.referrerId ? this.get(user.referrerId) : null;
+    if (parent) parent.markedChildren = parent.markedChildren.filter(item => item !== id);
+    user.marketMarked = false;
+    user.marketMarkedAt = null;
+    if (!user.joined) this.users.delete(id);
+    return user;
+  }
+
+  joinMarkedUser(id, joinedAtMs) {
+    const user = this.get(id);
+    if (!user) throw new Error('该账号不存在。');
+    if (!user.marketMarked || user.joined) throw new Error('须为已标记且未入团的节点。');
+    const referrerId = user.referrerId;
+    const parent = this.get(referrerId);
+    if (parent) parent.markedChildren = parent.markedChildren.filter(item => item !== id);
+    this.users.delete(id);
+    const options = joinedAtMs != null ? { joinedAt: joinedAtMs } : {};
+    return this.addUser(referrerId, id, options);
+  }
+
+  setJoinedAt(id, ms) {
+    const user = this.get(id);
+    if (!user) throw new Error('该账号不存在。');
+    if (user.reentry) throw new Error('复投点不能改购买时间。');
+    if (!user.joined) throw new Error('未入团节点请改标记时间。');
+    user.joinedAt = ms;
+    if (user.referrerId) this.sortMarketSiblings(user.referrerId);
+    return user;
+  }
+
+  addUser(referrerId, requestedId = '', options = {}) {
+    const { referrer, id } = this._resolveInviteId(referrerId, requestedId);
 
     const referralAncestors = this.ancestors(referrerId, 'referrerId');
     const user = this.makeUser(id, referrerId, referrer.depth + 1);
@@ -288,9 +339,10 @@ class Simulation {
     this.users.set(id, user);
     this.placeChild(referrer, id);
     user.joined = true;
-    if (user.joinedAt == null) {
-      user.joinedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
-    }
+    user.marketMarked = false;
+    user.marketMarkedAt = null;
+    if (options.joinedAt != null) user.joinedAt = options.joinedAt;
+    else if (user.joinedAt == null) user.joinedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
     this.sortMarketSiblings(referrerId);
     const position = this.realChildren(referrerId).indexOf(id) + 1;
     const zone = position <= 2 ? 'group' : 'support';
