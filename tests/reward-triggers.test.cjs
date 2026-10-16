@@ -134,7 +134,7 @@ test('席位按邀请顺序固定，第 3 名直推下单本身不发订单奖',
   assert.equal(sim.get('张三').wallet.order, 0);
 });
 
-test('扶持区第 2 直推：支路团长领订单奖且根仍为普通时不向上', () => {
+test('扶持区第 2 直推：支路直推满 3 但未成团时上级可收订单奖，根仍为普通时不向上', () => {
   const sim = fresh();
   sim.addUser('张三', 'A1');
   sim.addUser('A1', 'B1');
@@ -143,6 +143,7 @@ test('扶持区第 2 直推：支路团长领订单奖且根仍为普通时不�
   sim.addUser('B3', 'C1');
   const forward = sim.addUser('B3', 'C2');
   assert.equal(sim.role('A1'), '团长');
+  assert.equal(sim.isGroupComplete('A1'), false);
   assert.equal(sim.role('张三'), '普通');
   assert.ok(amount(forward, 'A1', 'order') > 0);
   assert.equal(amount(forward, 'A1', 'order'), 1990);
@@ -153,10 +154,8 @@ test('根已是团长时扶持区第 2 直推不再发订单奖', () => {
   const sim = fresh();
   sim.addUser('张三', 'A1');
   sim.addUser('张三', 'A2');
-  sim.addUser('A1');
-  sim.addUser('A1');
-  sim.addUser('A2');
-  sim.addUser('A2');
+  sim.addUser('A1'); sim.addUser('A1');
+  sim.addUser('A2'); sim.addUser('A2');
   sim.addUser('张三', 'A3');
   assert.equal(sim.role('张三'), '团长');
   sim.addUser('A3', 'S1');
@@ -169,7 +168,7 @@ test('根已是团长时扶持区第 2 直推不再发订单奖', () => {
   assert.equal(amount(blocked, '张三', 'order'), 0);
 });
 
-test('第 2 名直推才向上发扶持区订单奖，左右位跳过，已是团长则停止', () => {
+test('第 2 名直推才向上发扶持区订单奖，左右位跳过，已成团长则停止', () => {
   const sim = fresh();
   sim.addUser('张三', 'A1');
   sim.addUser('A1', 'B1');

@@ -283,16 +283,19 @@ class Simulation {
     if (previousDirectCount === 1) {
       let supportRoot = referrer;
       const rootAlreadyLeader = leaderBefore.get(ROOT_ID);
+      const orderWalkStop = (id) => {
+        const user = this.get(id);
+        return Boolean(user && !user.reentry && user.joined
+          && this.realChildren(id).length >= 3 && this.isGroupComplete(id));
+      };
       for (const ancestor of referralAncestors.slice(1, ORDER_LAYERS + 1)) {
-        if (leaderBefore.get(supportRoot.id)) break;
+        if (orderWalkStop(ancestor.id) || orderWalkStop(supportRoot.id)) break;
         const branch = this.realChildren(ancestor.id).indexOf(supportRoot.id);
         const ancestorWasLeader = leaderBefore.get(ancestor.id);
-        // 根还是普通成员时，扶持区订单奖可落在该支路已成团长的上级；根已是团长则不再给其他团长发订单奖。
         if (branch >= 2 && !(ancestorWasLeader && rootAlreadyLeader)) {
           pay(ancestor, 'order', this.percentCents(REWARD_RATES.order),
             supportRoot.id + ' 的第 2 名直推触发扶持区订单奖 · 实付 × 10%', id);
         }
-        if (ancestorWasLeader) break;
         supportRoot = ancestor;
       }
     }
