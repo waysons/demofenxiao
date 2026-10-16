@@ -41,6 +41,12 @@ function userOptions() {
     escapeHTML(user.id) + ' · ' + sim.role(user.id) + '</option>').join('');
 }
 
+// 邀请推荐人下拉：只列已入团的真人（排除仅标记与复投点）。operator 下拉仍用 userOptions 列全部节点。
+function referrerOptions() {
+  return [...sim.users.values()].filter(user => user.joined && !user.reentry).map(user =>
+    '<option value="' + escapeHTML(user.id) + '">' + escapeHTML(user.id) + ' · ' + sim.role(user.id) + '</option>').join('');
+}
+
 function renderStats() {
   const users = [...sim.users.values()];
   $('stat-users').textContent = users.length.toLocaleString('zh-CN');
@@ -94,14 +100,15 @@ function renderNodeOps(user) {
   $('node-joined-at').value = msToDatetimeLocal(timeMs);
   $('node-joined-at').disabled = readOnly || (!joined && !markedOnly);
   $('node-save-time').disabled = readOnly || (!joined && !markedOnly);
-  $('node-mark').disabled = readOnly;
+  // 未入团 / 仅标记节点下不能再嵌套标记。
+  $('node-mark').disabled = readOnly || !joined;
   $('node-unmark').disabled = readOnly || !markedOnly;
   $('node-join').disabled = readOnly || !markedOnly;
   let hint = '';
   if (readOnly) hint = '复投 (PS) 节点只读，不可改代理或购买时间。';
   else if (markedOnly) hint = '当前为仅标记：不占左右位、无 199 流水。可改标记时间，或「模拟购买入团」走完整结算。';
   else if (joined) hint = '已入团：保存时间会重排同级席位，不重发历史奖金。';
-  else hint = '未入团：可在其下「仅标记已购」占位，或通过邀请弹窗勾选仅标记。';
+  else hint = '已入团节点下可「仅标记已购」占位；未入团 / 仅标记节点下不能邀请或标记。';
   $('node-ops-hint').textContent = hint;
 }
 
@@ -398,6 +405,9 @@ $('node-save-time').addEventListener('click', () => {
   const user = sim.get(selectedId);
   const ms = parseDatetimeLocal($('node-joined-at').value);
   if (ms == null) { showToast('请填写有效时间'); return; }
+  // datetime-local 只到分钟：与原时间同一分钟视为未修改，避免秒级差异引起无意义重排。
+  const current = user.marketMarked && !user.joined ? user.marketMarkedAt : user.joinedAt;
+  if (current != null && msToDatetimeLocal(current) === msToDatetimeLocal(ms)) { showToast('时间未变化'); return; }
   try {
     if (user.marketMarked && !user.joined) {
       user.marketMarkedAt = ms;
@@ -512,8 +522,10 @@ $('page-prev').addEventListener('click', () => { page--; renderLedger(); });
 $('page-next').addEventListener('click', () => { page++; renderLedger(); });
 
 $('invite-open').addEventListener('click', () => {
-  $('invite-referrer').innerHTML = userOptions();
-  $('invite-referrer').value = selectedId;
+  $('invite-referrer').innerHTML = referrerOptions();
+  // 当前选中节点若未入团或为复投点，退回根节点张三。
+  const picked = sim.get(selectedId);
+  $('invite-referrer').value = picked && picked.joined && !picked.reentry ? selectedId : ROOT_ID;
   $('invite-name').value = '';
   $('invite-mark-only').checked = false;
   updateInvitePreview();

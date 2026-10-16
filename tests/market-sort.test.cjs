@@ -31,3 +31,15 @@ test('同档都无裂变时按 joinedAt 新→旧', () => {
   sim.sortMarketSiblings('张三');
   assert.deepEqual([...sim.realChildren('张三')], ['B2', 'B1']);
 });
+
+test('裂变与 joinedAt 都相同：按 joinSeq 先入团者在前，不看账号名', () => {
+  const sim = fresh();
+  // 故意让字典序较大的 Z9 先入团
+  sim.addUser('张三', 'Z9');
+  sim.addUser('张三', 'B1');
+  sim.get('Z9').joinedAt = 5000;
+  sim.get('B1').joinedAt = 5000;
+  sim.sortMarketSiblings('张三');
+  assert.ok(sim.get('Z9').joinSeq < sim.get('B1').joinSeq);
+  assert.deepEqual([...sim.realChildren('张三')], ['Z9', 'B1']);
+});

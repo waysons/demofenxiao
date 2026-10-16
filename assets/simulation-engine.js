@@ -22,9 +22,12 @@ class Simulation {
     this.orders = [];
     this.nextOrderId = 1;
     this.nameCounters = new Map();
+    // 真人入团单调序号：同级「裂变 + 入团时间」都相同时，先入团的排前，避免依赖账号名字典序。
+    this.joinSeq = 0;
     const root = this.makeUser(ROOT_ID, null, 0);
     root.joined = true;
     root.joinedAt = 0;
+    root.joinSeq = 0;
     root.spent = 0;
     this.users.set(ROOT_ID, root);
   }
@@ -33,7 +36,7 @@ class Simulation {
     return {
       id, userId: id, referrerId, depth, round: 1, children: [], markedChildren: [], agentLevel: '',
       reentry: false, exited: false, reentered: false,
-      joined: false, joinedAt: null, marketMarked: false, marketMarkedAt: null,
+      joined: false, joinedAt: null, joinSeq: null, marketMarked: false, marketMarkedAt: null,
       teamSize: 1, groupAwarded: false, groupBonusCents: 0, managementAwarded: false,
       spent: 0, maxDownlineDepth: 0,
       wallet: {
@@ -78,6 +81,7 @@ class Simulation {
   sortMarketSiblings(parentId) {
     const parent = this.get(parentId);
     if (!parent) return;
+    // 排序键：有裂变优先 → 入团时间晚者在前 → joinSeq 升序（入团早者在前）。
     const real = parent.children.filter(id => {
       const c = this.get(id);
       return c && !c.reentry && c.joined;
@@ -90,7 +94,8 @@ class Simulation {
       const ta = this.get(a).joinedAt || 0;
       const tb = this.get(b).joinedAt || 0;
       if (tb !== ta) return tb - ta;
-      return String(a).localeCompare(String(b));
+      // 裂变与入团时间都相同：按入团先后（joinSeq 小者在前），不用账号名比较。
+      return this.get(a).joinSeq - this.get(b).joinSeq;
     });
     parent.children = [...real, ...slides];
   }
@@ -267,6 +272,8 @@ class Simulation {
     const referrer = this.get(referrerId);
     if (!referrer) throw new Error('直接推荐人不存在，请重新选择。');
     if (referrer.reentry) throw new Error('复投点不能再邀请下级。');
+    // 未入团（含仅标记）节点不能当推荐人，也不能在其下继续标记，否则订单奖/团长口径会失真。
+    if (!referrer.joined) throw new Error('推荐人尚未入团，请先模拟购买入团后再邀请或标记下级。');
     const id = requestedId.trim().toUpperCase() || this.nextName(referrerId);
     if (!/^[A-Z]{1,8}[1-9]\d{0,5}$/.test(id)) {
       throw new Error('账号格式为大写字母组 + 正整数，例如 B1、C12；最多 8 位字母和 6 位数字。');
@@ -317,6 +324,9 @@ class Simulation {
     if (user.reentry) throw new Error('复投点不能改购买时间。');
     if (!user.joined) throw new Error('未入团节点请改标记时间。');
     user.joinedAt = ms;
+    // 订单上同步购买时间，deleteBranch 重放时才能还原。
+    const own = this.orders.find(order => order.type !== 'reentry' && order.buyerId === id);
+    if (own) own.joinedAt = ms;
     if (user.referrerId) this.sortMarketSiblings(user.referrerId);
     return user;
   }
@@ -339,10 +349,13 @@ class Simulation {
     this.users.set(id, user);
     this.placeChild(referrer, id);
     user.joined = true;
+    user.joinSeq = ++this.joinSeq;
     user.marketMarked = false;
     user.marketMarkedAt = null;
     if (options.joinedAt != null) user.joinedAt = options.joinedAt;
     else if (user.joinedAt == null) user.joinedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
+    order.joinedAt = user.joinedAt;
+    order.joinSeq = user.joinSeq;
     this.sortMarketSiblings(referrerId);
     const position = this.realChildren(referrerId).indexOf(id) + 1;
     const zone = position <= 2 ? 'group' : 'support';
@@ -364,17 +377,12 @@ class Simulation {
     // 已入团用户的真人直推从 1 人增至 2 人时，才向上查找扶持区订单奖。复投不算第二位。
     if (previousDirectCount === 1) {
       let supportRoot = referrer;
-      const rootAlreadyLeader = leaderBefore.get(ROOT_ID);
-      const orderWalkStop = (id) => {
-        const user = this.get(id);
-        return Boolean(user && !user.reentry && user.joined
-          && this.realChildren(id).length >= 3 && this.isGroupComplete(id));
-      };
+      // 与后端一致：团长 = 付款前真人直推已满 3（leaderBefore 快照），与是否成团无关。
+      // 注意：模拟器里推荐人必须已入团，故第 3 位及以后分支上的上级必然已是团长，订单奖实际不会触发。
       for (const ancestor of referralAncestors.slice(1, ORDER_LAYERS + 1)) {
-        if (orderWalkStop(ancestor.id) || orderWalkStop(supportRoot.id)) break;
+        if (leaderBefore.get(ancestor.id) || leaderBefore.get(supportRoot.id)) break;
         const branch = this.realChildren(ancestor.id).indexOf(supportRoot.id);
-        const ancestorWasLeader = leaderBefore.get(ancestor.id);
-        if (branch >= 2 && !(ancestorWasLeader && rootAlreadyLeader)) {
+        if (branch >= 2) {
           pay(ancestor, 'order', this.percentCents(REWARD_RATES.order),
             supportRoot.id + ' 的第 2 名直推触发扶持区订单奖 · 实付 × 10%', id);
         }
@@ -467,6 +475,10 @@ class Simulation {
     const keptOrders = this.orders.filter(order => order.type !== 'reentry' && !removed.has(order.buyerId));
     const keptLevels = new Map([...this.users].filter(([userId, user]) => !removed.has(userId) && !user.reentry).map(([userId, user]) => [userId, user.agentLevel]));
     const orderCount = this.orders.filter(order => removed.has(order.buyerId)).length;
+    // 仅标记节点没有订单，重放不会生成它们；先存下未被删除的标记，重放后原样恢复。
+    const keptMarked = [...this.users.values()]
+      .filter(user => user.marketMarked && !user.joined && !removed.has(user.id))
+      .map(user => ({ id: user.id, referrerId: user.referrerId, markedAt: user.marketMarkedAt }));
     const savedCounters = new Map(this.nameCounters);
     const savedNextOrderId = this.nextOrderId;
     const rebuilt = new Simulation();
@@ -475,7 +487,9 @@ class Simulation {
         const member = rebuilt.get(userId);
         if (member && !member.reentry) member.agentLevel = level;
       }
-      const order = rebuilt.addUser(previous.referrerId, previous.buyerId);
+      // 带上原购买时间，否则重放会用新的默认时间，同级市场排序就变了。
+      const order = rebuilt.addUser(previous.referrerId, previous.buyerId,
+        previous.joinedAt != null ? { joinedAt: previous.joinedAt } : {});
       order.id = previous.id;
       order.time = previous.time;
       order.agentLevels = previous.agentLevels || {};
@@ -483,6 +497,11 @@ class Simulation {
     for (const [userId, level] of keptLevels) {
       const member = rebuilt.get(userId);
       if (member && !member.reentry) member.agentLevel = level;
+    }
+    for (const mark of keptMarked) {
+      // 推荐人必为未删除的已入团节点（否则该标记已在 removed 里），重放后一定存在。
+      const marked = rebuilt.addMarkedUser(mark.referrerId, mark.id);
+      marked.marketMarkedAt = mark.markedAt;
     }
     if (id !== ROOT_ID) {
       rebuilt.nameCounters = savedCounters;
@@ -501,6 +520,7 @@ class Simulation {
     this.orders = rebuilt.orders;
     this.nameCounters = rebuilt.nameCounters;
     this.nextOrderId = rebuilt.nextOrderId;
+    this.joinSeq = rebuilt.joinSeq;
     return { removedIds, orderCount };
   }
 }
