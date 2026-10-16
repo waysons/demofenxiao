@@ -12,6 +12,23 @@ let toastTimer;
 const PAGE_SIZE = 12;
 const expanded = new Map();
 
+function msToDatetimeLocal(ms) {
+  if (ms == null || Number.isNaN(ms)) return '';
+  const d = new Date(ms);
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
+function parseDatetimeLocal(value) {
+  if (!value) return null;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function treeChildIds(user) {
+  return [...user.children, ...(user.markedChildren || [])];
+}
+
 function showToast(message) {
   clearTimeout(toastTimer);
   $('toast').textContent = message;
@@ -44,9 +61,10 @@ function renderUser() {
   $('user-parent').textContent = '直接推荐人 · ' + (user.referrerId || '无（根节点）');
   $('user-income').textContent = money(sim.income(user.id));
   $('user-spent').textContent = '模拟下单支出 ' + money(user.spent) + (user.id === ROOT_ID ? ' · 初始账号' : ' · 已模拟扣款');
-  $('user-direct').textContent = user.children.length;
+  $('user-direct').textContent = sim.realChildren(user.id).length;
   $('user-team').textContent = user.teamSize;
   $('agent-level').value = user.agentLevel || '';
+  $('agent-level').disabled = user.reentry;
   for (const type of Object.keys(REWARD_NAMES)) $('reward-' + type).textContent = money(user.wallet[type] || 0);
   const members = sim.groupMemberIds(user.id);
   const progress = Math.min(members.length, 7);
@@ -56,14 +74,35 @@ function renderUser() {
   const leaders = user.children.filter(id => sim.role(id) === '团长').length;
   const groupBonus = money(Math.round(PRICE * REWARD_RATES.group / 100));
   const managementBonus = money(Math.round(Math.round(PRICE * REWARD_RATES.group / 100) * REWARD_RATES.management / 100));
-  const leaderGap = sim.role(user.id) === '团长' ? '已是团长。' : [
-    members.length >= 7 ? '' : '七人团还差 ' + (7 - members.length) + ' 人',
-    user.children.length >= 3 ? '' : '还要第 3 名直推'
-  ].filter(Boolean).join('，') + '，才成为团长。';
-  $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 ' + groupBonus + '，此团不重复结算。' : '前两名直推的整棵下级树加上本人满 7 人，获得一次拼团奖 ' + groupBonus + '。') +
-    leaderGap + ' 已有 ' + leaders + ' 名直推成为团长；双方都是团长后，每名直推产生一次管理奖 ' + managementBonus + '，累计 ' + money(user.wallet.management) + '。';
+  const realDirect = sim.realChildren(user.id).length;
+  const leaderGap = sim.role(user.id) === '团长'
+    ? '已是团长（真人直推满 3）。'
+    : (realDirect >= 3 ? '' : '还差 ' + (3 - realDirect) + ' 名真人直推') + '才是团长，与七人团是否满员无关。';
+  const groupGate = sim.realChildren(user.id).length >= 2 ? '' : ' · 真人直推满 2 才触发成团';
+  $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 ' + groupBonus + '，此团不重复结算。' : '前两名直推的整棵下级树加上本人满 7 人，且真人直推满 2，获得一次拼团奖 ' + groupBonus + '。') +
+    leaderGap + groupGate + ' 已有 ' + leaders + ' 名直推成为团长；双方都是团长且下级已拿拼团奖，每名直推产生一次管理奖 ' + managementBonus + '，累计 ' + money(user.wallet.management) + '。';
   $('qualification-status').textContent = '可继续邀请。订单奖从触发人的直接上级向上最多 ' + ORDER_LAYERS + ' 层；当前向下最深 ' + user.maxDownlineDepth + ' 层。邀请不暂停。';
-  $('invite-open').disabled = false;
+  $('invite-open').disabled = user.reentry;
+  renderNodeOps(user);
+}
+
+function renderNodeOps(user) {
+  const readOnly = user.reentry;
+  const markedOnly = user.marketMarked && !user.joined;
+  const joined = user.joined && !user.reentry;
+  const timeMs = joined ? user.joinedAt : markedOnly ? user.marketMarkedAt : null;
+  $('node-joined-at').value = msToDatetimeLocal(timeMs);
+  $('node-joined-at').disabled = readOnly || (!joined && !markedOnly);
+  $('node-save-time').disabled = readOnly || (!joined && !markedOnly);
+  $('node-mark').disabled = readOnly;
+  $('node-unmark').disabled = readOnly || !markedOnly;
+  $('node-join').disabled = readOnly || !markedOnly;
+  let hint = '';
+  if (readOnly) hint = '复投 (PS) 节点只读，不可改代理或购买时间。';
+  else if (markedOnly) hint = '当前为仅标记：不占左右位、无 199 流水。可改标记时间，或「模拟购买入团」走完整结算。';
+  else if (joined) hint = '已入团：保存时间会重排同级席位，不重发历史奖金。';
+  else hint = '未入团：可在其下「仅标记已购」占位，或通过邀请弹窗勾选仅标记。';
+  $('node-ops-hint').textContent = hint;
 }
 
 function renderTree() {
@@ -88,13 +127,16 @@ function renderTree() {
   }
   const renderNode = (id, depth) => {
     const user = sim.get(id);
-    const children = user.children;
+    const children = treeChildIds(user);
     const isOpen = expanded.get(id) ?? depth < 2;
     const selected = id === selectedId;
-    const position = depth > 0 ? sim.get(user.referrerId).children.indexOf(id) + 1 : 0;
+    const isMarkedOnly = user.marketMarked && !user.joined;
+    const position = depth > 0 && !isMarkedOnly && user.joined && !user.reentry
+      ? sim.realChildren(user.referrerId).indexOf(id) + 1
+      : 0;
     const inGroupZone = position === 1 || position === 2;
     const agentShort = { county: '县代', city: '市代', province: '省代' }[user.agentLevel] || '';
-    const zoneLabel = position ? (inGroupZone ? '' : '扶持区 · ') + '第 ' + position + ' 位' : '当前团队顶点';
+    const zoneLabel = isMarkedOnly ? '仅标记 · 未入团' : position ? (inGroupZone ? '' : '扶持区 · ') + '第 ' + position + ' 位' : '当前团队顶点';
     const zoneClass = position === 0 ? 'root-zone' : inGroupZone ? 'group-zone' : 'other-zone';
     const zone = position === 0 ? 'root' : inGroupZone ? 'group' : 'support';
     const edgeLabel = position && !inGroupZone ? '<span class="edge-label edge-support">扶持区</span>' : '';
@@ -104,12 +146,14 @@ function renderTree() {
     const incomeLabel = selected ? '主节点 · 累计收益' : '贡献给 ' + selectedId;
     const rewardTerms = Object.entries(REWARD_NAMES).filter(([type]) => !selected && rewards[type] > 0).map(([type, name]) =>
       '<span class="reward-term reward-tone-' + type + '">' + name + ' <span class="mono" data-reward="' + type + '">' + money(rewards[type]) + '</span></span>');
-    const node = '<div class="node-card ' + (selected ? 'selected' : '') + '"><button type="button" class="node ' + zoneClass + ' ' + (selected ? 'selected' : '') + '" data-user="' + escapeHTML(id) +
+    const markedClass = isMarkedOnly ? ' node-marked' : '';
+    const node = '<div class="node-card ' + (selected ? 'selected' : '') + '"><button type="button" class="node ' + zoneClass + markedClass + ' ' + (selected ? 'selected' : '') + '" data-user="' + escapeHTML(id) +
       '" aria-pressed="' + selected + '" aria-label="选择 ' + escapeHTML(id) + '，' + sim.role(id) + '，团队 ' + user.teamSize + ' 人，' + escapeHTML(incomeLabel) + ' ' + money(total) + '">' +
       '<span class="flex items-center gap-1.5 pr-6"><strong class="mono text-sm truncate min-w-0" title="' + escapeHTML(id) + '">' + escapeHTML(id) + '</strong><span class="role-badge ' + (sim.role(id) === '团长' ? 'leader' : 'ordinary') + '">' + sim.role(id) + '</span>' +
+      (isMarkedOnly ? '<span class="mark-badge">标记</span>' : '') +
       (agentShort ? '<span class="role-badge ordinary">' + agentShort + '</span>' : '') + '</span>' +
       '<span class="zone-label">' + zoneLabel + '</span>' +
-      '<span class="block text-[10px] muted mt-2.5">团队 <b class="text-slate-300 font-normal mono">' + user.teamSize + '</b> 人 <span class="text-slate-600">/</span> 直推 ' + user.children.length + ' <span class="text-slate-600">/</span> 成团 ' + sim.groupProgress(id) + '/7</span>' +
+      '<span class="block text-[10px] muted mt-2.5">团队 <b class="text-slate-300 font-normal mono">' + user.teamSize + '</b> 人 <span class="text-slate-600">/</span> 直推 ' + sim.realChildren(id).length + (user.markedChildren?.length ? '+' + user.markedChildren.length + '标记' : '') + ' <span class="text-slate-600">/</span> 成团 ' + sim.groupProgress(id) + '/7</span>' +
       '<span class="block text-[10px] muted mt-2 break-words">' + escapeHTML(incomeLabel) + '</span>' +
       '<span class="node-contribution"><span class="contribution-total">' + (selected ? '总收益 ' : '总贡献 ') + '<span class="node-income mono">' + money(total) + '</span></span>' +
       (rewardTerms.length ? '<span class="reward-equation"><span class="muted">= </span>' + rewardTerms.join('<span class="muted"> + </span>') + '</span>' : '') + '</span></button>' +
@@ -118,11 +162,11 @@ function renderTree() {
     const management = managementContributions.get(id) || 0;
     const managementLabel = user.referrerId === selectedId
       ? '<div class="management-outline reward-tone-management" data-management-source="' + escapeHTML(id) + '">管理奖 <span class="mono" data-reward="management">' + money(management) + '</span><span class="block">' +
-        (management ? '给 ' + escapeHTML(selectedId) + ' · 已结算一次' : '待双方成团且各有 3 名直推') + '</span></div>' : '';
+        (management ? '给 ' + escapeHTML(selectedId) + ' · 已结算一次' : '待双方均为团长且下级已拿拼团奖') + '</span></div>' : '';
     return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + managementLabel + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
   };
   $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines"></div>';
-  $('tree-empty').hidden = root.children.length > 0;
+  $('tree-empty').hidden = treeChildIds(root).length > 0;
   scheduleGroupOutlines();
 }
 
@@ -228,9 +272,13 @@ function selectUser(id) {
 function updateInvitePreview() {
   const id = $('invite-referrer').value;
   const generated = sim.nextName(id);
+  const markOnly = $('invite-mark-only').checked;
   $('invite-name').placeholder = generated + '（自动生成）';
   $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
-  $('invite-reward-preview').textContent = sim.describeNextInvite(id);
+  $('invite-reward-preview').textContent = markOnly
+    ? '仅标记：树上显示角标，不扣 199、不占左右位、不发直推奖。'
+    : sim.describeNextInvite(id);
+  $('invite-submit').textContent = markOnly ? '确认仅标记' : '确认邀请并模拟下单';
   $('invite-submit').disabled = false;
   $('invite-error').hidden = true;
 }
@@ -342,6 +390,51 @@ $('agent-level').addEventListener('change', event => {
   renderUser();
   renderTree();
 });
+
+$('node-save-time').addEventListener('click', () => {
+  const user = sim.get(selectedId);
+  const ms = parseDatetimeLocal($('node-joined-at').value);
+  if (ms == null) { showToast('请填写有效时间'); return; }
+  try {
+    if (user.marketMarked && !user.joined) {
+      user.marketMarkedAt = ms;
+      showToast(selectedId + ' 标记时间已更新');
+    } else {
+      sim.setJoinedAt(selectedId, ms);
+      showToast(selectedId + ' 入团时间已保存并重排同级');
+    }
+    renderAll();
+  } catch (error) { showToast(error.message); }
+});
+
+$('node-mark').addEventListener('click', () => {
+  try {
+    const created = sim.addMarkedUser(selectedId);
+    selectUser(created.id);
+    showToast(created.id + ' 已仅标记（未入团）');
+    renderAll();
+  } catch (error) { showToast(error.message); }
+});
+
+$('node-unmark').addEventListener('click', () => {
+  try {
+    const id = selectedId;
+    const fallback = sim.get(id).referrerId || ROOT_ID;
+    sim.clearMarketMark(id);
+    if (selectedId === id) selectedId = fallback;
+    showToast(id + ' 已取消仅标记');
+    renderAll();
+  } catch (error) { showToast(error.message); }
+});
+
+$('node-join').addEventListener('click', () => {
+  try {
+    const at = parseDatetimeLocal($('node-joined-at').value);
+    const order = sim.joinMarkedUser(selectedId, at);
+    showToast(order.buyerId + ' 已模拟入团 · 扣款 199 · 奖金已结算');
+    renderAll();
+  } catch (error) { showToast(error.message); }
+});
 $('tree').addEventListener('click', event => {
   const remove = event.target.closest('[data-delete]');
   if (remove) { openDeleteDialog(remove.dataset.delete); return; }
@@ -419,12 +512,14 @@ $('invite-open').addEventListener('click', () => {
   $('invite-referrer').innerHTML = userOptions();
   $('invite-referrer').value = selectedId;
   $('invite-name').value = '';
+  $('invite-mark-only').checked = false;
   updateInvitePreview();
   $('invite-dialog').showModal();
   $('invite-name').focus();
 });
 $('invite-close').addEventListener('click', () => $('invite-dialog').close());
 $('invite-referrer').addEventListener('change', updateInvitePreview);
+$('invite-mark-only').addEventListener('change', updateInvitePreview);
 $('invite-name').addEventListener('input', () => { $('invite-error').hidden = true; });
 $('invite-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -433,12 +528,23 @@ $('invite-form').addEventListener('submit', event => {
   submit.disabled = true;
   try {
     const referrerId = $('invite-referrer').value;
-    const order = sim.addUser(referrerId, $('invite-name').value);
-    selectedId = referrerId; // 继续观察推荐人的收益，方便连续邀请。
-    page = 0;
-    $('invite-dialog').close();
-    renderAll();
-    showToast(order.buyerId + ' 已加入 · 模拟扣款 199 元 · 奖金已结算');
+    const name = $('invite-name').value;
+    const markOnly = $('invite-mark-only').checked;
+    if (markOnly) {
+      const created = sim.addMarkedUser(referrerId, name);
+      selectedId = created.id;
+      page = 0;
+      $('invite-dialog').close();
+      renderAll();
+      showToast(created.id + ' 已仅标记（未入团）');
+    } else {
+      const order = sim.addUser(referrerId, name);
+      selectedId = referrerId; // 继续观察推荐人的收益，方便连续邀请。
+      page = 0;
+      $('invite-dialog').close();
+      renderAll();
+      showToast(order.buyerId + ' 已加入 · 模拟扣款 199 元 · 奖金已结算');
+    }
   } catch (error) {
     $('invite-error').textContent = error.message;
     $('invite-error').hidden = false;

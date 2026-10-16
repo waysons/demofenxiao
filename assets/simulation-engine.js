@@ -453,7 +453,10 @@ class Simulation {
   branchIds(id) {
     if (!this.get(id)) throw new Error('该节点不存在。');
     const ids = [id];
-    for (let index = 0; index < ids.length; index++) ids.push(...this.get(ids[index]).children);
+    for (let index = 0; index < ids.length; index++) {
+      const node = this.get(ids[index]);
+      ids.push(...node.children, ...(node.markedChildren || []));
+    }
     return ids;
   }
 
