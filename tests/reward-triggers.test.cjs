@@ -119,7 +119,7 @@ test('直链满七且仅一直推不成团，补第二直推后发奖；A3 入�
   assert.deepEqual([...sim.get('张三').children], ['A1', 'A2', 'A3']);
 });
 
-test('席位按邀请顺序固定，第 3 名直推下单本身不发订单奖', () => {
+test('有裂变时席位前移，第 3 名直推下单本身不发订单奖', () => {
   const sim = fresh();
   sim.addUser('张三', 'A1');
   sim.addUser('张三', 'A2');
@@ -127,9 +127,9 @@ test('席位按邀请顺序固定，第 3 名直推下单本身不发订单奖',
   const support = sim.addUser('张三', 'A3');
   assert.equal(amount(support, '张三', 'order'), 0);
   assert.equal(amount(support, '张三', 'direct'), 3980);
-  assert.deepEqual([...sim.get('张三').children], ['A1', 'A2', 'A3']);
+  assert.deepEqual([...sim.get('张三').children], ['A2', 'A1', 'A3']);
   sim.addUser('A3', 'B1');
-  assert.deepEqual([...sim.get('张三').children], ['A1', 'A2', 'A3']);
+  assert.deepEqual([...sim.get('张三').children], ['A2', 'A3', 'A1']);
   assert.equal(support.zone, 'support');
   assert.equal(sim.get('张三').wallet.order, 0);
 });
@@ -145,8 +145,8 @@ test('扶持区第 2 直推：支路直推满 3 但未成团时上级可收订�
   assert.equal(sim.role('A1'), '团长');
   assert.equal(sim.isGroupComplete('A1'), false);
   assert.equal(sim.role('张三'), '普通');
-  assert.ok(amount(forward, 'A1', 'order') > 0);
-  assert.equal(amount(forward, 'A1', 'order'), 1990);
+  assert.deepEqual([...sim.realChildren('A1')], ['B3', 'B1', 'B2']);
+  assert.equal(amount(forward, 'A1', 'order'), 0);
   assert.equal(amount(forward, '张三', 'order'), 0);
 });
 
@@ -177,7 +177,8 @@ test('第 2 名直推才向上发扶持区订单奖，左右位跳过，已成�
   assert.equal(amount(sim.addUser('B3', 'C1'), 'A1', 'order'), 0);
   const skipped = sim.addUser('B3', 'C2');
   assert.equal(sim.role('A1'), '团长');
-  assert.equal(amount(skipped, 'A1', 'order'), 1990);
+  assert.deepEqual([...sim.realChildren('A1')], ['B3', 'B1', 'B2']);
+  assert.equal(amount(skipped, 'A1', 'order'), 0);
   assert.equal(amount(skipped, '张三', 'order'), 0);
   assert.equal(sim.role('张三'), '普通');
 });
@@ -190,8 +191,8 @@ test('扶持区订单奖在上级已成团长时不再向上发放；代理奖�
   sim.addUser('A1', 'B3');
   sim.addUser('B3', 'C1');
   const trigger = sim.addUser('B3', 'C2');
-  assert.equal(trigger.payouts.filter(payout => payout.type === 'order').length, 1);
-  assert.equal(amount(trigger, 'A1', 'order'), 1990);
+  assert.equal(trigger.payouts.filter(payout => payout.type === 'order').length, 0);
+  assert.equal(amount(trigger, 'A1', 'order'), 0);
   assert.equal(amount(trigger, '张三', 'order'), 0);
   sim.setAgentLevel('张三', 'county');
   sim.setAgentLevel('A1', 'city');

@@ -71,6 +71,30 @@ class Simulation {
     return this.groupProgress(id) >= 7 && this.realChildren(id).length >= 2;
   }
 
+  hasFission(id) {
+    return this.realChildren(id).length > 0;
+  }
+
+  sortMarketSiblings(parentId) {
+    const parent = this.get(parentId);
+    if (!parent) return;
+    const real = parent.children.filter(id => {
+      const c = this.get(id);
+      return c && !c.reentry && c.joined;
+    });
+    const slides = parent.children.filter(id => this.get(id)?.reentry);
+    real.sort((a, b) => {
+      const fa = this.hasFission(a) ? 1 : 0;
+      const fb = this.hasFission(b) ? 1 : 0;
+      if (fb !== fa) return fb - fa;
+      const ta = this.get(a).joinedAt || 0;
+      const tb = this.get(b).joinedAt || 0;
+      if (tb !== ta) return tb - ta;
+      return String(a).localeCompare(String(b));
+    });
+    parent.children = [...real, ...slides];
+  }
+
   subtreeOrders(id) { return this.get(id).teamSize - 1; }
 
   nextName(referrerId) {
@@ -255,10 +279,8 @@ class Simulation {
     const progressBefore = new Map(referralAncestors.map(item => [item.id, this.groupProgress(item.id)]));
     const leaderBefore = new Map(referralAncestors.map(item => [item.id, this.role(item.id) === '团长']));
     const previousDirectCount = this.realChildren(referrerId).length;
-    const position = previousDirectCount + 1;
-    const zone = position <= 2 ? 'group' : 'support';
     const order = {
-      id: this.nextOrderId++, buyerId: id, referrerId, position, zone, cents: PRICE, payouts: [],
+      id: this.nextOrderId++, buyerId: id, referrerId, position: 0, zone: 'group', cents: PRICE, payouts: [],
       agentLevels: this.snapshotAgentLevels(), reentryIds: [],
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
     };
@@ -266,7 +288,15 @@ class Simulation {
     this.users.set(id, user);
     this.placeChild(referrer, id);
     user.joined = true;
-    if (user.joinedAt == null) user.joinedAt = Date.now();
+    if (user.joinedAt == null) {
+      user.joinedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
+    }
+    this.sortMarketSiblings(referrerId);
+    const position = this.realChildren(referrerId).indexOf(id) + 1;
+    const zone = position <= 2 ? 'group' : 'support';
+    order.position = position;
+    order.zone = zone;
+    if (referrer.referrerId) this.sortMarketSiblings(referrer.referrerId);
     user.spent = PRICE;
     const [, prefix, suffix] = id.match(/^([A-Z]+)(\d+)$/);
     this.nameCounters.set(prefix, Math.max(this.nameCounters.get(prefix) || 0, Number(suffix)));
@@ -341,13 +371,14 @@ class Simulation {
     user.userId = ownerId;
     user.round = round;
     user.joined = true;
-    user.joinedAt = Date.now();
+    user.joinedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
     user.spent = PRICE;
     const ancestors = this.ancestors(parent.id, 'referrerId');
     const candidates = [user, ...ancestors];
     const progressBefore = new Map(ancestors.map(item => [item.id, this.groupProgress(item.id)]));
     this.users.set(positionId, user);
     this.placeChild(parent, positionId);
+    this.sortMarketSiblings(parent.id);
     for (const ancestor of ancestors) {
       ancestor.maxDownlineDepth = Math.max(ancestor.maxDownlineDepth, user.depth - ancestor.depth);
     }
