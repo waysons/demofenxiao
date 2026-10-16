@@ -81,7 +81,7 @@
           <div class="rounded-xl bg-slate-950/30 border border-slate-700/40 p-3.5"><div class="flex justify-between text-[11px]"><span class="muted">七人团进度</span><span id="group-status" class="text-blue-300">1 / 7</span></div><p id="user-group-members" class="text-[10px] text-violet-300 mt-2.5 break-words"></p><div id="group-dots" class="flex justify-center gap-2 mt-3" aria-hidden="true"></div><p id="group-hint" class="text-[10px] muted mt-2.5 leading-relaxed">本人 + 前两名直推的整棵下级树满 7 人，且真人直推满 2，获得一次拼团奖。真人直推满 3 即为团长。</p></div>
           <p id="qualification-status" class="text-[11px] text-amber-200 mt-4" role="status"></p>
           <button id="invite-open" class="primary w-full mt-5 flex items-center justify-center gap-2"><span class="text-lg leading-none" aria-hidden="true">＋</span> 新增下线 / 邀请人</button>
-          <p class="text-[10px] text-slate-500 text-center mt-2.5">每次新增自动模拟支付 199 元并结算</p>
+          <p class="text-[10px] text-slate-500 text-center mt-2.5">购买入团自动模拟支付 199 并结算；仅标记不扣款</p>
         </section>
 
         <details class="panel px-5 py-4 text-xs">
@@ -123,7 +123,7 @@
 
   <dialog id="invite-dialog" aria-labelledby="invite-title">
     <div class="flex items-start justify-between gap-4"><div><p class="eyebrow mb-2">NEW MEMBER</p><h2 id="invite-title" class="text-xl font-semibold">邀请一位新伙伴</h2></div><button id="invite-close" type="button" class="secondary !px-2 !py-1" aria-label="关闭邀请弹窗">✕</button></div>
-    <p class="muted text-xs mt-2 mb-6">创建账号后，自动完成一笔模拟订单及奖金结算。</p>
+    <p class="muted text-xs mt-2 mb-6">购买入团将自动模拟一笔 199 订单及奖金结算；勾选「仅标记」则不扣款、不占左右位、不发奖。</p>
     <form id="invite-form">
       <label for="invite-referrer" class="block text-xs text-slate-300 mb-2">直接推荐人</label><select id="invite-referrer" class="field mb-4" required></select>
       <label for="invite-name" class="block text-xs text-slate-300 mb-2">新账号名称 <span class="muted">· 留空自动生成</span></label><input id="invite-name" class="field mono" maxlength="14" autocomplete="off" spellcheck="false" aria-describedby="name-hint invite-error"><p id="name-hint" class="text-[10px] muted mt-2"></p>
@@ -138,7 +138,7 @@
   </dialog>
 
   <dialog id="reset-dialog" aria-labelledby="reset-title"><h2 id="reset-title" class="text-lg font-semibold">重新开始模拟？</h2><p class="text-sm muted mt-3 leading-relaxed">本页现有成员、订单及奖金记录将清空，恢复为初始账号张三。</p><div class="flex justify-end gap-3 mt-6"><button id="reset-cancel" class="secondary">保留数据</button><button id="reset-confirm" class="primary !py-2">确认重置</button></div></dialog>
-  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title" class="text-lg font-semibold text-rose-200">删除节点与记录</h2><p id="delete-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3 leading-relaxed">剩余订单将按原始顺序重新结算，收益和拼团状态同步更新，拼团区按保留的邀请顺序重新编号。</p><p id="delete-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p><div class="flex justify-end gap-3 mt-6"><button id="delete-cancel" class="secondary">取消</button><button id="delete-confirm" class="danger">删除分支与记录</button></div></dialog>
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title" class="text-lg font-semibold text-rose-200">删除节点与记录</h2><p id="delete-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3 leading-relaxed">剩余订单将按原始顺序重新结算，收益和拼团状态同步更新，席位按市场动态重算：有裂变优先，同档入团时间新→旧。</p><p id="delete-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p><div class="flex justify-end gap-3 mt-6"><button id="delete-cancel" class="secondary">取消</button><button id="delete-confirm" class="danger">删除分支与记录</button></div></dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p style="padding:24px;color:#fda4af">此模拟器需要启用 JavaScript 才能运行。</p></noscript>
 <script id="simulation-engine" src="./assets/simulation-engine.js?v=20261017-market" defer></script>

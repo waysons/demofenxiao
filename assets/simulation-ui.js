@@ -163,7 +163,8 @@ function renderTree() {
     const managementLabel = user.referrerId === selectedId
       ? '<div class="management-outline reward-tone-management" data-management-source="' + escapeHTML(id) + '">管理奖 <span class="mono" data-reward="management">' + money(management) + '</span><span class="block">' +
         (management ? '给 ' + escapeHTML(selectedId) + ' · 已结算一次' : '待双方均为团长且下级已拿拼团奖') + '</span></div>' : '';
-    return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '">' + edgeLabel + node + managementLabel + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
+    const markedAttr = isMarkedOnly ? ' data-marked-only="true"' : '';
+    return '<li data-node="' + escapeHTML(id) + '" data-zone="' + zone + '"' + markedAttr + '>' + edgeLabel + node + managementLabel + toggle + (children.length && isOpen ? '<ul>' + children.map(child => renderNode(child, depth + 1)).join('') + '</ul>' : '') + '</li>';
   };
   $('tree').innerHTML = '<ul>' + renderNode(viewRoot, 0) + '</ul><div id="group-outlines"></div>';
   $('tree-empty').hidden = treeChildIds(root).length > 0;
@@ -177,7 +178,9 @@ function drawGroupOutlines() {
   layer.replaceChildren();
   const origin = $('tree').getBoundingClientRect();
   $('tree').querySelectorAll('li[data-node]').forEach(parent => {
-    const members = [...parent.querySelectorAll(':scope > ul > li')].slice(0, 2);
+    const members = [...parent.querySelectorAll(':scope > ul > li')]
+      .filter(li => !li.hasAttribute('data-marked-only') && !li.querySelector('.mark-badge'))
+      .slice(0, 2);
     if (!members.length) return;
     const rects = members.map(member => member.querySelector(':scope > .node-card').getBoundingClientRect());
     const left = Math.min(...rects.map(rect => rect.left));
