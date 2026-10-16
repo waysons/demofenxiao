@@ -134,6 +134,41 @@ test('席位按邀请顺序固定，第 3 名直推下单本身不发订单奖',
   assert.equal(sim.get('张三').wallet.order, 0);
 });
 
+test('扶持区第 2 直推：支路团长领订单奖且根仍为普通时不向上', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'A1');
+  sim.addUser('A1', 'B1');
+  sim.addUser('A1', 'B2');
+  sim.addUser('A1', 'B3');
+  sim.addUser('B3', 'C1');
+  const forward = sim.addUser('B3', 'C2');
+  assert.equal(sim.role('A1'), '团长');
+  assert.equal(sim.role('张三'), '普通');
+  assert.ok(amount(forward, 'A1', 'order') > 0);
+  assert.equal(amount(forward, 'A1', 'order'), 1990);
+  assert.equal(amount(forward, '张三', 'order'), 0);
+});
+
+test('根已是团长时扶持区第 2 直推不再发订单奖', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'A1');
+  sim.addUser('张三', 'A2');
+  sim.addUser('A1');
+  sim.addUser('A1');
+  sim.addUser('A2');
+  sim.addUser('A2');
+  sim.addUser('张三', 'A3');
+  assert.equal(sim.role('张三'), '团长');
+  sim.addUser('A3', 'S1');
+  sim.addUser('A3', 'S2');
+  sim.addUser('A3', 'S3');
+  sim.addUser('S3', 'T1');
+  const blocked = sim.addUser('S3', 'T2');
+  assert.equal(sim.role('A3'), '团长');
+  assert.equal(amount(blocked, 'A3', 'order'), 0);
+  assert.equal(amount(blocked, '张三', 'order'), 0);
+});
+
 test('第 2 名直推才向上发扶持区订单奖，左右位跳过，已是团长则停止', () => {
   const sim = fresh();
   sim.addUser('张三', 'A1');
@@ -143,26 +178,9 @@ test('第 2 名直推才向上发扶持区订单奖，左右位跳过，已是�
   assert.equal(amount(sim.addUser('B3', 'C1'), 'A1', 'order'), 0);
   const skipped = sim.addUser('B3', 'C2');
   assert.equal(sim.role('A1'), '团长');
-  assert.equal(amount(skipped, 'A1', 'order'), 0);
+  assert.equal(amount(skipped, 'A1', 'order'), 1990);
   assert.equal(amount(skipped, '张三', 'order'), 0);
   assert.equal(sim.role('张三'), '普通');
-
-  const leaders = fresh();
-  leaders.addUser('张三', 'A1');
-  leaders.addUser('张三', 'A2');
-  leaders.addUser('A1');
-  leaders.addUser('A1');
-  leaders.addUser('A2');
-  leaders.addUser('A2');
-  leaders.addUser('张三', 'A3');
-  assert.equal(leaders.role('张三'), '团长');
-  leaders.addUser('A3', 'S1');
-  leaders.addUser('A3', 'S2');
-  leaders.addUser('A3', 'S3');
-  leaders.addUser('S3', 'T1');
-  const blocked = leaders.addUser('S3', 'T2');
-  assert.equal(amount(blocked, 'A3', 'order'), 0);
-  assert.equal(amount(blocked, '张三', 'order'), 0);
 });
 
 test('扶持区订单奖在上级已成团长时不再向上发放；代理奖按下单时等级结算并在删除后重放', () => {
@@ -173,7 +191,9 @@ test('扶持区订单奖在上级已成团长时不再向上发放；代理奖�
   sim.addUser('A1', 'B3');
   sim.addUser('B3', 'C1');
   const trigger = sim.addUser('B3', 'C2');
-  assert.equal(trigger.payouts.filter(payout => payout.type === 'order').length, 0);
+  assert.equal(trigger.payouts.filter(payout => payout.type === 'order').length, 1);
+  assert.equal(amount(trigger, 'A1', 'order'), 1990);
+  assert.equal(amount(trigger, '张三', 'order'), 0);
   sim.setAgentLevel('张三', 'county');
   sim.setAgentLevel('A1', 'city');
   const agentOrder = sim.addUser('A1', 'B20');

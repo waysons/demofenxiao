@@ -282,13 +282,17 @@ class Simulation {
     // 已入团用户的真人直推从 1 人增至 2 人时，才向上查找扶持区订单奖。复投不算第二位。
     if (previousDirectCount === 1) {
       let supportRoot = referrer;
+      const rootAlreadyLeader = leaderBefore.get(ROOT_ID);
       for (const ancestor of referralAncestors.slice(1, ORDER_LAYERS + 1)) {
-        if (leaderBefore.get(ancestor.id) || leaderBefore.get(supportRoot.id)) break;
+        if (leaderBefore.get(supportRoot.id)) break;
         const branch = this.realChildren(ancestor.id).indexOf(supportRoot.id);
-        if (branch >= 2) {
+        const ancestorWasLeader = leaderBefore.get(ancestor.id);
+        // 根还是普通成员时，扶持区订单奖可落在该支路已成团长的上级；根已是团长则不再给其他团长发订单奖。
+        if (branch >= 2 && !(ancestorWasLeader && rootAlreadyLeader)) {
           pay(ancestor, 'order', this.percentCents(REWARD_RATES.order),
             supportRoot.id + ' 的第 2 名直推触发扶持区订单奖 · 实付 × 10%', id);
         }
+        if (ancestorWasLeader) break;
         supportRoot = ancestor;
       }
     }

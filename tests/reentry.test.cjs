@@ -87,13 +87,16 @@ test('单链满 7 不成团；补第 2 直推后发拼团奖并滑落', () => {
     parent = id;
   }
   assert.ok(sim.groupProgress('张三') >= 7);
+  assert.equal(sim.isGroupComplete('张三'), false);
   assert.equal(sim.get('张三').groupAwarded, false);
   assert.equal(sim.get('张三').wallet.group, 0);
   assert.equal([...sim.users.values()].filter(u => u.reentry).length, 0);
 
   const second = sim.addUser('张三', 'A2');
+  assert.equal(sim.isGroupComplete('张三'), true);
   assert.equal(sim.get('张三').groupAwarded, true);
   assert.equal(amount(second, '张三', 'group'), 2985);
   assert.deepEqual([...second.reentryIds], ['张三:2']);
   assert.ok(sim.get('张三:2')?.reentry);
+  assert.equal(sim.isGroupComplete('张三:2'), false);
 });
