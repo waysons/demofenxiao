@@ -134,66 +134,47 @@ test('有裂变时席位前移，第 3 名直推下单本身不发订单奖', ()
   assert.equal(sim.get('张三').wallet.order, 0);
 });
 
-test('扶持区第 2 直推：支路上级 A1 已是团长（直推满 3）时订单奖立即截断，不向上发放', () => {
+test('A 邀 B1/B2/B3 后 B3 邀满两人：A 已是团长仍拿扶持区订单奖', () => {
   const sim = fresh();
-  sim.addUser('张三', 'A1');
-  sim.addUser('A1', 'B1');
-  sim.addUser('A1', 'B2');
-  sim.addUser('A1', 'B3');
-  sim.addUser('B3', 'C1');
-  const forward = sim.addUser('B3', 'C2');
-  assert.equal(sim.role('A1'), '团长');
-  assert.equal(sim.isGroupComplete('A1'), false);
-  assert.equal(sim.role('张三'), '普通');
-  assert.deepEqual([...sim.realChildren('A1')], ['B3', 'B1', 'B2']);
-  assert.equal(amount(forward, 'A1', 'order'), 0);
-  assert.equal(amount(forward, '张三', 'order'), 0);
-});
-
-test('根已是团长时扶持区第 2 直推不再发订单奖', () => {
-  const sim = fresh();
-  sim.addUser('张三', 'A1');
-  sim.addUser('张三', 'A2');
-  sim.addUser('A1'); sim.addUser('A1');
-  sim.addUser('A2'); sim.addUser('A2');
-  sim.addUser('张三', 'A3');
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
   assert.equal(sim.role('张三'), '团长');
-  sim.addUser('A3', 'S1');
-  sim.addUser('A3', 'S2');
-  sim.addUser('A3', 'S3');
-  sim.addUser('S3', 'T1');
-  const blocked = sim.addUser('S3', 'T2');
-  assert.equal(sim.role('A3'), '团长');
-  assert.equal(amount(blocked, 'A3', 'order'), 0);
-  assert.equal(amount(blocked, '张三', 'order'), 0);
-});
-
-test('第 2 名直推触发向上查找，但上级已是团长则立即停止，订单奖为 0', () => {
-  const sim = fresh();
-  sim.addUser('张三', 'A1');
-  sim.addUser('A1', 'B1');
-  sim.addUser('A1', 'B2');
-  sim.addUser('A1', 'B3');
-  assert.equal(amount(sim.addUser('B3', 'C1'), 'A1', 'order'), 0);
-  const skipped = sim.addUser('B3', 'C2');
-  assert.equal(sim.role('A1'), '团长');
-  assert.deepEqual([...sim.realChildren('A1')], ['B3', 'B1', 'B2']);
-  assert.equal(amount(skipped, 'A1', 'order'), 0);
-  assert.equal(amount(skipped, '张三', 'order'), 0);
-  assert.equal(sim.role('张三'), '普通');
-});
-
-test('订单奖在团长上级处截断（无订单奖）；代理奖按下单时等级结算并在删除后重放', () => {
-  const sim = fresh();
-  sim.addUser('张三', 'A1');
-  sim.addUser('A1', 'B1');
-  sim.addUser('A1', 'B2');
-  sim.addUser('A1', 'B3');
+  assert.equal(sim.inviteOrderedRealChildren('张三').indexOf('B3'), 2);
   sim.addUser('B3', 'C1');
-  const trigger = sim.addUser('B3', 'C2');
-  assert.equal(trigger.payouts.filter(payout => payout.type === 'order').length, 0);
-  assert.equal(amount(trigger, 'A1', 'order'), 0);
-  assert.equal(amount(trigger, '张三', 'order'), 0);
+  // 市场重排会把有裂变的 B3 挪到左位，订单奖仍按入团顺序认扶持区
+  assert.equal(sim.realChildren('张三').indexOf('B3'), 0);
+  assert.equal(sim.inviteOrderedRealChildren('张三').indexOf('B3'), 2);
+  const second = sim.addUser('B3', 'C2');
+  assert.equal(sim.role('B3'), '普通');
+  assert.equal(amount(second, '张三', 'order'), 1990);
+  assert.equal(sim.get('张三').wallet.order, 1990);
+});
+
+test('B3 成为团长后，其下扶持区再凑齐两人时 A 被截流拿不到订单奖', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
+  sim.addUser('B3', 'C1');
+  sim.addUser('B3', 'C2');
+  assert.equal(sim.get('张三').wallet.order, 1990);
+  sim.addUser('B3', 'C3');
+  assert.equal(sim.role('B3'), '团长');
+  assert.equal(sim.inviteOrderedRealChildren('B3').indexOf('C3'), 2);
+  sim.addUser('C3', 'D1');
+  const blocked = sim.addUser('C3', 'D2');
+  // 支线根走到 B3 时 B3 已是团长 → 截流，张三不再拿
+  assert.equal(amount(blocked, '张三', 'order'), 0);
+  assert.equal(sim.get('张三').wallet.order, 1990);
+  // B3 作为团长仍可领取本层（C3 按入团序为第 3 名）订单奖
+  assert.equal(amount(blocked, 'B3', 'order'), 1990);
+});
+
+test('代理奖按下单时等级结算并在删除后重放', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'A1');
+  sim.addUser('A1', 'B1');
   sim.setAgentLevel('张三', 'county');
   sim.setAgentLevel('A1', 'city');
   const agentOrder = sim.addUser('A1', 'B20');
@@ -205,22 +186,6 @@ test('订单奖在团长上级处截断（无订单奖）；代理奖按下单�
   assert.equal(sim.get('张三').agentLevel, 'province');
   const replayed = sim.addUser('A1', 'B21');
   assert.equal(amount(replayed, '张三', 'agent_province'), 1791);
-});
-
-// 订单奖口径：付款前上级或支路根已是团长（真人直推 >= 3）就停止；branch >= 2 又意味着该上级直推已 >= 3。
-// 模拟器要求推荐人已入团，所以两个条件互斥，订单奖不可达。用固定种子随机树验证这一点，并防止回归。
-test('已入团推荐人约束下订单奖恒为 0（固定种子随机树）', () => {
-  let seed = 20261017;
-  const rand = n => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed % n; };
-  for (let run = 0; run < 40; run++) {
-    const sim = fresh();
-    for (let step = 0; step < 30; step++) {
-      const ids = [...sim.users.values()].filter(user => user.joined && !user.reentry).map(user => user.id);
-      const order = sim.addUser(ids[rand(ids.length)]);
-      assert.equal(amount(order, order.referrerId, 'order'), 0);
-      assert.equal(order.payouts.filter(payout => payout.type === 'order').length, 0);
-    }
-  }
 });
 
 test('未入团 / 仅标记节点不能当推荐人，也不能在其下嵌套标记', () => {

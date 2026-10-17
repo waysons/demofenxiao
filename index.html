@@ -92,7 +92,7 @@
             <p><strong class="text-slate-300">七人团与团长：</strong>每人的七人团 = 本人 + 前两名直推各自整棵下级树里的已入团成员。本人第 3 名及以后的分支不计入本人的团，但会计入更上级、只要他们落在那位上级的前两枝里面。满 7 人且真人直推满 2 才发一次拼团奖。真人直推满 3 即为团长，与是否七人成团无关。</p>
             <p><strong class="text-slate-300">直推奖 20%：</strong>每邀请一名新成员，直接推荐人获得实付 × 20%。按 199 元计算是 39.80 元。左右位和扶持区都有，不限第几位。</p>
             <p><strong class="text-slate-300">拼团奖 15%：</strong>七人团人数第一次达到 7 时，给这位成员实付 × 15%，按 199 元是 29.85 元，只发一次。触发成团的是哪一笔订单，就按那一笔的实付计算。</p>
-            <p><strong class="text-slate-300">订单奖 10%：</strong>某位成员的已支付直推从 1 人变成 2 人时才触发。从该成员的直接上级向上最多查 8 层：这条链落在某上级的第 3 名及以后分支时，给该上级实付 × 10%；落在左右位则跳过并继续向上。若这笔订单付款前，该上级或对应的分支根已经是团长，查找就此停止。第 3 名直推下单的当时并不单独发订单奖。</p>
+            <p><strong class="text-slate-300">订单奖 10%：</strong>某位成员的已支付直推从 1 人变成 2 人时才触发。从该成员的直接上级向上最多查 8 层：落在某上级第 3 名及以后分支时，给该上级实付 × 10%；左右位跳过并继续向上。例：A 的扶持区 B3 邀满两人，A 拿订单奖（A 已是团长也照拿）。若付款前<strong>支线根</strong>已是团长（如 B3 直推满 3），则截流不再向上发给 A。第 3 名直推下单的当时并不单独发订单奖。</p>
             <p><strong class="text-slate-300">管理奖 8%：</strong>某名直推和其直接上级都已成为团长，并且这名直推已经拿到过拼团奖，才给直接上级结算一次：该直推拼团奖 × 8%。29.85 × 8% = 2.388 元，四舍五入为 2.39 元。下级先达标会等到上级也达标。不向更高层分摊。双方都是团长且下级已拿拼团奖才发管理奖。</p>
             <p><strong class="text-slate-300">代理奖：</strong>把成员设为县 / 市 / 省代理后，之后每笔下级订单按实付的 3% / 6% / 9% 发给该成员。已结算的旧订单不改。删除分支重算时，按每笔订单当时的等级重放。</p>
             <p><strong class="text-slate-300">八层：</strong>只限制订单奖向上查找的层数，不暂停邀请，也不需要复购。</p>
@@ -141,7 +141,7 @@
   <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title" class="text-lg font-semibold text-rose-200">删除节点与记录</h2><p id="delete-description" class="text-sm muted mt-3 leading-relaxed"></p><p class="text-xs muted mt-3 leading-relaxed">剩余订单将按原始顺序重新结算，收益和拼团状态同步更新，席位按市场动态重算：有裂变优先，同档入团时间新→旧。</p><p id="delete-error" class="text-xs text-rose-300 mt-3" role="alert" hidden></p><div class="flex justify-end gap-3 mt-6"><button id="delete-cancel" class="secondary">取消</button><button id="delete-confirm" class="danger">删除分支与记录</button></div></dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <noscript><p style="padding:24px;color:#fda4af">此模拟器需要启用 JavaScript 才能运行。</p></noscript>
-<script id="simulation-engine" src="./assets/simulation-engine.js?v=20261017-market" defer></script>
-<script id="simulation-ui" src="./assets/simulation-ui.js?v=20261017-market" defer></script>
+<script id="simulation-engine" src="./assets/simulation-engine.js?v=20261017-order" defer></script>
+<script id="simulation-ui" src="./assets/simulation-ui.js?v=20261017-order" defer></script>
 </body>
 </html>

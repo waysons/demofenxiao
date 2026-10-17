@@ -49,7 +49,7 @@ class Simulation {
   get(id) { return this.users.get(id); }
   income(id) { return Object.values(this.get(id).wallet).reduce((sum, value) => sum + value, 0); }
 
-  // 真人按邀请顺序占位。复投点只排在后面，不占左右位，也不算直推人数。
+  // 当前席位上的已入团真人（含市场重排后的左右/扶持顺序）。
   realChildren(id) {
     const user = this.get(id);
     return user
@@ -58,6 +58,15 @@ class Simulation {
           return child && !child.reentry && child.joined;
         })
       : [];
+  }
+
+  // 按入团顺序（joinSeq）看直推，不受市场重排影响。订单奖的「第 3 名扶持区」用这个判定。
+  inviteOrderedRealChildren(id) {
+    return this.realChildren(id).slice().sort((left, right) => {
+      const seqL = this.get(left)?.joinSeq || 0;
+      const seqR = this.get(right)?.joinSeq || 0;
+      return seqL - seqR || String(left).localeCompare(String(right));
+    });
   }
 
   // 团长：已入团真人直推满 3 人，与七人成团无关。复投点不能成为团长。
@@ -210,7 +219,7 @@ class Simulation {
     const direct = this.percentCents(REWARD_RATES.direct);
     const zone = position <= 2 ? '左右位，计入该推荐人的七人团' : '扶持区，不计入该推荐人自己的七人团';
     const orderNote = position === 2
-      ? '这是第 2 名直推，会从该推荐人的直接上级向上最多 8 层找订单奖：落在某上级第 3 名及以后分支才发实付的 10%，左右位跳过并继续向上；付款前该上级或对应分支根已是团长则停止。'
+      ? '这是第 2 名直推，会从该推荐人的直接上级向上最多 8 层找订单奖：落在某上级第 3 名及以后分支才发实付的 10%；若付款前支线根已是团长（直推满 3）则截流不再向上。上级本人是不是团长不影响他领取本层订单奖。'
       : position === 1
         ? '第 1 名直推不触发订单奖。'
         : '第 3 名及以后本身不发订单奖。等这位成员自己邀到第 2 名直推时，才可能沿上级链发扶持区订单奖。';
@@ -375,13 +384,13 @@ class Simulation {
       '第 ' + position + ' 位直推 ' + id + ' · 实付 × 20%');
 
     // 已入团用户的真人直推从 1 人增至 2 人时，才向上查找扶持区订单奖。复投不算第二位。
+    // 是否「扶持区」按入团顺序（joinSeq）判定，避免市场重排把 B3 挪到左位后丢单。
+    // 截流只看支线根付款前是否已是团长：B3 未成团长时 A 可拿；B3 已是团长则不再向上给 A。
     if (previousDirectCount === 1) {
       let supportRoot = referrer;
-      // 与后端一致：团长 = 付款前真人直推已满 3（leaderBefore 快照），与是否成团无关。
-      // 注意：模拟器里推荐人必须已入团，故第 3 位及以后分支上的上级必然已是团长，订单奖实际不会触发。
       for (const ancestor of referralAncestors.slice(1, ORDER_LAYERS + 1)) {
-        if (leaderBefore.get(ancestor.id) || leaderBefore.get(supportRoot.id)) break;
-        const branch = this.realChildren(ancestor.id).indexOf(supportRoot.id);
+        if (leaderBefore.get(supportRoot.id)) break;
+        const branch = this.inviteOrderedRealChildren(ancestor.id).indexOf(supportRoot.id);
         if (branch >= 2) {
           pay(ancestor, 'order', this.percentCents(REWARD_RATES.order),
             supportRoot.id + ' 的第 2 名直推触发扶持区订单奖 · 实付 × 10%', id);
