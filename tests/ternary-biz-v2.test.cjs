@@ -14,8 +14,16 @@ const fresh = (mode = 'ternary_biz_v2') => {
   sim.setSlideMode(mode);
   return sim;
 };
-const amount = (order, id, type) =>
-  order.payouts.filter(p => p.userId === id && p.type === type).reduce((sum, p) => sum + p.cents, 0);
+
+// 标准 1+2+4 成团（与 reentry.test 一致）
+function formSeven(sim, root = '张三') {
+  sim.addUser(root, 'A1');
+  sim.addUser(root, 'A2');
+  sim.addUser('A1', 'B1');
+  sim.addUser('A1', 'B2');
+  sim.addUser('A2', 'B3');
+  return sim.addUser('A2', 'B4');
+}
 
 test('V2：setSlideMode 接受 ternary_biz_v2，非法值仍抛错', () => {
   const sim = fresh('binary');
@@ -39,4 +47,17 @@ test('V2：groupSlotOpen 优先最左支未满 L/R 的节点', () => {
   sim.addUser('B1', 'C2');
   sim.setSlideMode('ternary_biz_v2');
   assert.equal(sim.groupSlotOpen('张三').id, 'B2');
+});
+
+test('V2：payOn 跳过复投点入账', () => {
+  const sim = fresh('left');
+  formSeven(sim);
+  sim.setSlideMode('ternary_biz_v2');
+  const re = [...sim.users.values()].find(u => u.reentry);
+  assert.ok(re);
+  const before = sim.income(re.id);
+  const order = { payouts: [] };
+  sim.payOn(order, re, 'direct', 4975, 'should skip');
+  assert.equal(sim.income(re.id), before);
+  assert.equal(order.payouts.length, 0);
 });
