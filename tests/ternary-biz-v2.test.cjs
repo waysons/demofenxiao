@@ -111,16 +111,65 @@ test('V2：1+2+4 成团发拼团奖；复投挂 L/R 可计团且钱包为 0', ()
   assert.equal(re.countsForGroup, true);
   assert.equal(sim.income('张三:2'), 0);
   assert.equal(sim.childSlot(re.referrerId, '张三:2') < 2, true);
+  // 计团滑落：帮扶直推奖给树上挂点（formSeven 后一般为 C1）
+  const hostId = re.referrerId;
+  const slide = sim.orders.find(order => order.type === 'reentry' && order.buyerId === '张三:2');
+  assert.equal(amount(slide, hostId, 'direct'), 4975);
+  assert.equal(amount(slide, '张三:2', 'direct'), 0);
+  assert.deepEqual([...sim.slideHostCredits(hostId)], ['张三:2']);
 });
 
-test('V2：B3 直推满 2 人时 A 拿订单奖', () => {
+test('V2：计团滑落帮扶席计入团长——邀 2 人 + 1 计团复投即团长', () => {
   const sim = fresh();
   sim.addUser('张三', 'B1');
-  sim.addUser('张三', 'B2');
-  sim.addUser('张三', 'B3');
-  sim.addUser('B3', 'D1');
-  const o = sim.addUser('B3', 'D2');
-  assert.equal(amount(o, '张三', 'order'), 2985);
+  // 空树挂计团复投 → B1 得帮扶直推与团长席 +1
+  const exited = sim.get('张三');
+  exited.groupAwarded = true;
+  exited.reentered = false;
+  const reOrder = sim.addReentry({
+    positionId: '张三:2', ownerId: '张三', round: 2, parent: sim.get('B1'), exited
+  });
+  assert.equal(sim.get('张三:2').referrerId, 'B1');
+  assert.equal(sim.get('张三:2').countsForGroup, true);
+  assert.equal(amount(reOrder, 'B1', 'direct'), 4975);
+  assert.equal(sim.role('B1'), '普通');
+  sim.addUser('B1', 'P1');
+  assert.equal(sim.role('B1'), '普通');
+  sim.addUser('B1', 'P2');
+  assert.equal(sim.leaderProgress('B1'), 3);
+  assert.equal(sim.role('B1'), '团长');
+});
+
+test('V2：扶持区不计团复投不发帮扶直推、不计团长席', () => {
+  const sim = fresh();
+  formSevenV2(sim);
+  // C1 已有计团复投，再挂一张不计团复投到 C1（满 2 后）
+  sim.addUser('C1', 'D1');
+  assert.equal(sim.groupCountedChildren('C1').length, 2);
+  const exited = sim.get('B1');
+  exited.groupAwarded = true;
+  exited.reentered = false;
+  const order = sim.addReentry({
+    positionId: 'B1:2', ownerId: 'B1', round: 2, parent: sim.get('C1'), exited
+  });
+  assert.equal(sim.get('B1:2').countsForGroup, false);
+  assert.equal(amount(order, 'C1', 'direct'), 0);
+  assert.equal(sim.slideHostCredits('C1').includes('B1:2'), false);
+});
+
+test('V2：扶持区 A3 直推满 2 人时张三拿订单奖 10%', () => {
+  const sim = fresh();
+  assert.equal(sim.rates.order, 10);
+  const a3 = sim.addUser('张三', 'A1');
+  sim.addUser('张三', 'A2');
+  const support = sim.addUser('张三', 'A3');
+  assert.equal(a3.zone, 'group');
+  assert.equal(support.zone, 'support');
+  sim.addUser('A3', 'D1');
+  const o = sim.addUser('A3', 'D2');
+  // 19900 × 10% = 1990 分 = ¥19.90
+  assert.equal(amount(o, '张三', 'order'), 1990);
+  assert.equal(sim.get('张三').wallet.order, 1990);
 });
 
 test('V2：复投点下可挂真人；直推奖给邀请原号；复投无 payout', () => {
@@ -189,6 +238,32 @@ test('V2：叶点挂计团复投后树占座=复投+2 真人，第 3 个真人�
   assert.equal(o3.zone, 'v2_slide');
   assert.equal(sim.treeOccupancy('C1'), 3);
   assert.equal(sim.realChildren('C1').length, 2);
+});
+
+test('V2：计团复投不占第二支线——B1 仅 1 真人时改挂到该真人下空叶，B1 可继续成团', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
+  sim.addUser('B1', 'C1');
+  // B1 仅 C1：若复投挂 B1 会占第二支，B1 成团将要求复投下再满 2 人
+  const parent = sim.get('B1');
+  const exited = sim.get('张三');
+  exited.groupAwarded = true;
+  exited.reentered = false;
+  sim.addReentry({ positionId: '张三:2', ownerId: '张三', round: 2, parent, exited });
+  const re = sim.get('张三:2');
+  assert.equal(re.referrerId, 'C1');
+  assert.equal(re.countsForGroup, true);
+  assert.deepEqual([...sim.groupCountedChildren('B1')], ['C1']);
+  assert.deepEqual([...sim.groupCountedChildren('C1')], ['张三:2']);
+  // 补齐 B1 第二支 + 各支叶子后 B1 可成团（复投已算入 C1 的一叶）
+  sim.addUser('B1', 'C2');
+  sim.addUser('C1', 'D1');
+  sim.addUser('C2', 'D2');
+  const done = sim.addUser('C2', 'D3');
+  assert.equal(sim.isGroupComplete('B1'), true);
+  assert.equal(amount(done, 'B1', 'group'), 3980);
 });
 
 test('V2：滑落标记入团后 inviteReferrer 不丢，直推奖给邀请人', () => {

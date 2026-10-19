@@ -44,16 +44,24 @@
 9. 复投点**可以挂下级**（参与 1-3-27）
 10. 复投点本人**不获得任何收益**（`pay` 时若 recipient 为复投点则跳过入账）
 11. 落点成团计数 `< 2` 时复投 `countsForGroup = true`（可占 L/R 计团）
+12. **滑落帮扶直推（仅计团滑落，口径 A）**：`countsForGroup` 复投挂到真人 `host` 时，给 **host** 发一笔与真人相同的直推奖；host 的团长进度 +1（见 §3.6）。扶持区不计团复投不发、不加团长。非 V2 模式不启用。
+
+### 3.6 团长（V2）
+
+- 非 V2：仍为邀请侧真人直推 ≥ 3
+- V2：`inviteOrderedRealChildren(id).length + slideHostCredits(id).length ≥ 3`
+- `slideHostCredits(id)`：树上 `referrerId === id` 且 `reentry && countsForGroup` 的节点（每个计 1）
 
 ### 3.4 成团后再邀
 
-12. 不使用 `latestReentryId` 强制挂复投支
-13. 与第 4 人起相同：`groupSlotOpen(inviteReferrerId)`；若算法选中复投点则可挂其下，奖仍给邀请原号
+13. 不使用 `latestReentryId` 强制挂复投支
+14. 与第 4 人起相同：`groupSlotOpen(inviteReferrerId)`；若算法选中复投点则可挂其下，奖仍给邀请原号
 
 ### 3.5 1-3-27
 
-14. 每个真人节点树上体现宽 3（L + R + 扶持）；溢出只滑去帮补别人的 L/R，不堆本人第 4+ 扶持席
-15. 七人团仍只认前两支；扶持区不计团
+15. 每个真人节点树上体现宽 3（L + R + 扶持）；溢出只滑去帮补别人的 L/R，不堆本人第 4+ 扶持席
+16. 七人团仍只认前两支；扶持区不计团
+17. 计团复投优先挂到「仅 1 个真人支」下的空叶，避免占第二支线卡死上级成团
 
 ## 4. 引擎要点
 

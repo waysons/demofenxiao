@@ -11,7 +11,7 @@ const REWARD_NAMES = {
 };
 // 默认比例；实例可改，只影响之后新订单（删除重放按订单快照）。
 const DEFAULT_REWARD_RATES = {
-  direct: 25, group: 20, order: 15, management: 8,
+  direct: 25, group: 20, order: 10, management: 8,
   agent_county: 3, agent_city: 6, agent_province: 9
 };
 // 兼容旧 UI/测试：指向默认表；运行中请用 sim.rates。
@@ -88,12 +88,27 @@ class Simulation {
       .map(member => member.id);
   }
 
+  // V2：挂在本人树上的计团复投，计入帮扶直推席（团长进度）。
+  slideHostCredits(id) {
+    if (!this.usesTernaryBizV2()) return [];
+    const user = this.get(id);
+    if (!user) return [];
+    return user.children.filter(childId => {
+      const child = this.get(childId);
+      return child && child.joined && child.reentry && child.countsForGroup;
+    });
+  }
+
+  leaderProgress(id) {
+    return this.inviteOrderedRealChildren(id).length + this.slideHostCredits(id).length;
+  }
+
   role(id) {
     const user = this.get(id);
     if (!user) return '普通';
     if (user.reentry) return '复投';
-    // 团长按邀请直推满 3（双轨滑落不挡升级）
-    return this.inviteOrderedRealChildren(id).length >= 3 ? '团长' : '普通';
+    // 非 V2：邀请直推满 3；V2：邀请直推 + 计团滑落帮扶席满 3
+    return this.leaderProgress(id) >= 3 ? '团长' : '普通';
   }
 
   // 二二复制：本人树最多挂 2 真人，第 3 人起滑到空位。
@@ -461,13 +476,16 @@ class Simulation {
         : this.slideMode === 'ternary_biz'
           ? '成团后复投滑到最左下方并可计团；第 3 人仍进原号扶持区，第 4 人起才挂到最新复投点分支下'
           : this.slideMode === 'ternary_biz_v2'
-            ? '成团后复投按 L/R DFS 找空位；第 3 人仍进原号扶持区，第 4 人起才滑落挂点（复投可挂点、零收益）'
+            ? '成团后复投按 L/R DFS 找空；计团滑落给树上挂点发帮扶直推奖并计团长席 +1（复投点本人零收益）'
             : this.slideMode === 'alternate'
               ? '成团后按左右轮换滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）'
               : '成团后向左链最底滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）';
+    const leaderNote = this.usesTernaryBizV2()
+      ? '团长：邀请直推 + 计团滑落帮扶席合计满 3。'
+      : '邀请直推满 3 人即为团长。';
     return '第 ' + invitePos + ' 位邀请直推（' + zone + '）。推荐人获得直推奖 ' + (direct / 100).toFixed(2) +
       ' 元。' + orderNote + ' 七人团须严格 1+2+4 才发一次拼团奖（' + rates.group + '%），' + slideNote +
-      '。邀请直推满 3 人即为团长。双方都是团长后，按该下级拼团奖的 ' + rates.management + '% 给邀请上级一次管理奖。';
+      '。' + leaderNote + '双方都是团长后，按该下级拼团奖的 ' + rates.management + '% 给邀请上级一次管理奖。';
   }
 
   snapshotAgentLevels() {
@@ -767,12 +785,25 @@ class Simulation {
     }
   }
 
+  // 计团复投：父节点若仅 1 个真人计团子，改挂到该子下空叶。
+  // 避免复投占第二支线，导致上级 1+2+4 要求「复投下再满 2 人」却难邀请而卡死。
+  preferCountingReentryHost(parent) {
+    if (!this.usesBizGroupCount() || !parent || parent.reentry) return parent;
+    const counted = this.groupCountedChildren(parent.id);
+    if (counted.length !== 1) return parent;
+    const only = this.get(counted[0]);
+    if (!only || only.reentry) return parent;
+    if (this.groupCountedChildren(only.id).length >= 2) return parent;
+    return only;
+  }
+
   addReentry({ positionId, ownerId, round, parent, exited }) {
     if (parent.reentry) throw new Error('复投点不能挂复投下级');
     if (this.users.has(positionId)) throw new Error('复投点已存在');
+    parent = this.preferCountingReentryHost(parent);
     const user = this.makeUser(positionId, parent.id, parent.depth + 1);
     user.reentry = true;
-    // 纯商业版：落点成团计数未满 2 时复投占拼团区并计团
+    // 纯商业版 / V2：落点成团计数未满 2 时复投占拼团区并计团（算入拼团资格）
     user.countsForGroup = this.usesBizGroupCount() && this.groupCountedChildren(parent.id).length < 2;
     user.userId = ownerId;
     user.round = round;
@@ -797,7 +828,12 @@ class Simulation {
       time: new Date().toLocaleTimeString('zh-CN', { hour12: false })
     };
     const pay = (recipient, type, cents, note, sourceId) => this.payOn(order, recipient, type, cents, note, sourceId);
-    // 不发直推奖/代理奖；商业版计团复投可触发落点成团。
+    // V2 计团滑落：给树上挂点 host 发帮扶直推奖（复投点本人仍零收益）。
+    if (this.usesTernaryBizV2() && user.countsForGroup && !parent.reentry) {
+      pay(parent, 'direct', this.percentCents(rates.direct),
+        '滑落帮扶 · ' + positionId + ' 计团挂入 · 实付 × ' + rates.direct + '%', ownerId);
+    }
+    // 不计团复投仍不发直推/代理；商业版计团复投可触发落点成团。
     order.completed = this.settleGroup(candidates, progressBefore, pay, ownerId);
     this.settleManagement(candidates, pay);
     this.orders.push(order);

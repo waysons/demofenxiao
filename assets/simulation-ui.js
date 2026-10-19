@@ -72,7 +72,7 @@ function syncSlideModeUi() {
       badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-fuchsia-500/40 text-fuchsia-200';
     }
     if (hint) {
-      hint.textContent = '三三复制商业V2：第1–2拼团区、第3扶持区；第4人起L/R深度优先滑落帮扶；成团复投同算法可计团可挂点但零收益；成团后再邀不强制挂复投点。';
+      hint.textContent = '三三复制商业V2：第1–2拼团区、第3扶持区；第4人起L/R滑落；计团复投给挂点发帮扶直推并计团长席+1（复投点零收益）；成团后再邀不强制挂复投点。';
     }
   } else if (mode === 'alternate') {
     if (badge) {
@@ -99,6 +99,27 @@ function softResetSimulation(slideMode) {
   expanded.clear();
 }
 
+function currentRates() {
+  return sim.rates || DEFAULT_REWARD_RATES;
+}
+
+function syncRateInputs() {
+  const rates = currentRates();
+  document.querySelectorAll('[data-rate-key]').forEach(input => {
+    input.value = rates[input.dataset.rateKey];
+  });
+  document.querySelectorAll('[data-reward-rate]').forEach(label => {
+    label.textContent = rates[label.dataset.rewardRate] + '%';
+  });
+  const agentSelect = $('agent-level');
+  if (!agentSelect) return;
+  [...agentSelect.options].forEach(opt => {
+    if (opt.value === 'county') opt.textContent = '县级代理 · ' + rates.agent_county + '%';
+    if (opt.value === 'city') opt.textContent = '市级代理 · ' + rates.agent_city + '%';
+    if (opt.value === 'province') opt.textContent = '省级代理 · ' + rates.agent_province + '%';
+  });
+}
+
 function orderZoneLabel(order) {
   if (order.zone === 'group') return '左右位';
   if (order.zone === 'binary_slide' || order.zone === 'v2_slide') return '滑落帮扶';
@@ -110,9 +131,14 @@ function userOptions() {
     escapeHTML(user.id) + ' · ' + sim.role(user.id) + '</option>').join('');
 }
 
-// 邀请推荐人下拉：只列已入团的真人（排除仅标记与复投点）。operator 下拉仍用 userOptions 列全部节点。
+// 邀请推荐人下拉：已入团真人；V2 另允许复投点（挂点记复投、邀请记原号）。
 function referrerOptions() {
-  return [...sim.users.values()].filter(user => user.joined && !user.reentry).map(user =>
+  const allowReentry = sim.slideMode === 'ternary_biz_v2';
+  return [...sim.users.values()].filter(user => {
+    if (!user.joined) return false;
+    if (user.reentry) return allowReentry;
+    return true;
+  }).map(user =>
     '<option value="' + escapeHTML(user.id) + '">' + escapeHTML(user.id) + ' · ' + sim.role(user.id) + '</option>').join('');
 }
 
@@ -147,8 +173,9 @@ function renderUser() {
   $('group-status').textContent = user.groupAwarded ? '已成团 ✓' : members.length + ' / 7';
   $('group-dots').innerHTML = Array.from({ length: 7 }, (_, i) => '<span class="group-dot ' + (i < progress ? 'filled' : '') + '">' + (i < progress ? '✓' : '·') + '</span>').join('');
   const leaders = user.children.filter(id => sim.role(id) === '团长').length;
-  const groupBonus = money(Math.round(PRICE * REWARD_RATES.group / 100));
-  const managementBonus = money(Math.round(Math.round(PRICE * REWARD_RATES.group / 100) * REWARD_RATES.management / 100));
+  const rates = currentRates();
+  const groupBonus = money(Math.round(PRICE * rates.group / 100));
+  const managementBonus = money(Math.round(Math.round(PRICE * rates.group / 100) * rates.management / 100));
   const realDirect = sim.realChildren(user.id).length;
   const leaderGap = sim.role(user.id) === '团长'
     ? '已是团长（真人直推满 3）。'
@@ -157,7 +184,8 @@ function renderUser() {
   $('group-hint').textContent = (user.groupAwarded ? '已发拼团奖 ' + groupBonus + '，此团不重复结算。' : '前两名直推的整棵下级树加上本人满 7 人，且真人直推满 2，获得一次拼团奖 ' + groupBonus + '。') +
     leaderGap + groupGate + ' 已有 ' + leaders + ' 名直推成为团长；双方都是团长且下级已拿拼团奖，每名直推产生一次管理奖 ' + managementBonus + '，累计 ' + money(user.wallet.management) + '。';
   $('qualification-status').textContent = '可继续邀请。订单奖从触发人的直接上级向上最多 ' + ORDER_LAYERS + ' 层；当前向下最深 ' + user.maxDownlineDepth + ' 层。邀请不暂停。';
-  $('invite-open').disabled = user.reentry;
+  // V2 允许从复投点发起邀请（引擎记原号）；其它模式仍禁用
+  $('invite-open').disabled = user.reentry && sim.slideMode !== 'ternary_biz_v2';
   renderNodeOps(user);
 }
 
@@ -331,9 +359,7 @@ function renderLedger() {
 function renderAll() {
   $('operator').innerHTML = userOptions();
   syncSlideModeUi();
-  document.querySelectorAll('[data-reward-rate]').forEach(label => {
-    label.textContent = REWARD_RATES[label.dataset.rewardRate] + '%';
-  });
+  syncRateInputs();
   renderStats();
   renderUser();
   renderTree();
@@ -349,16 +375,68 @@ function selectUser(id) {
   renderLedger();
 }
 
+const MAX_BATCH_INVITES = 100;
+
+function inviteCount() {
+  const n = Number($('invite-count').value);
+  if (!Number.isInteger(n) || n < 1 || n > 20) return null;
+  return n;
+}
+
+function inviteLevels() {
+  const n = Number($('invite-levels').value);
+  if (!Number.isInteger(n) || n < 1 || n > 5) return null;
+  return n;
+}
+
+// 每层每人再邀 count 人：总数 = count + count² + … + count^levels
+function projectedInviteTotal(count, levels) {
+  if (count === 1) return levels;
+  let total = 0;
+  let layer = 1;
+  for (let i = 0; i < levels; i++) {
+    layer *= count;
+    total += layer;
+  }
+  return total;
+}
+
 function updateInvitePreview() {
   const id = $('invite-referrer').value;
   const generated = sim.nextName(id);
   const markOnly = $('invite-mark-only').checked;
+  const count = inviteCount() || 1;
+  const levels = inviteLevels() || 1;
+  const total = projectedInviteTotal(count, levels);
+  const single = count === 1 && levels === 1;
   $('invite-name').placeholder = generated + '（自动生成）';
-  $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
-  $('invite-reward-preview').textContent = markOnly
-    ? '仅标记：树上显示角标，不扣 199、不占左右位、不发直推奖。'
-    : sim.describeNextInvite(id);
-  $('invite-submit').textContent = markOnly ? '确认仅标记' : '确认邀请并模拟下单';
+  $('invite-name').disabled = !single;
+  if (levels > 1 && markOnly) {
+    $('name-hint').textContent = '仅标记模式只支持 1 层；请把向下层数改为 1。';
+  } else if (!single) {
+    $('name-hint').textContent = '将按「每层 ' + count + ' 人 × ' + levels + ' 层」自动生成约 ' + total +
+      ' 人（从 ' + generated + ' 起）。合计超过 ' + MAX_BATCH_INVITES + ' 人会拒绝。';
+  } else {
+    $('name-hint').textContent = '默认生成 ' + generated + '；也可输入字母组 + 数字，小写会自动转大写。';
+  }
+  $('invite-total-cost').textContent = markOnly ? '¥0.00' : money(PRICE * total);
+  if (markOnly && levels > 1) {
+    $('invite-reward-preview').textContent = '仅标记不能多层扩展，请将向下层数设为 1。';
+  } else if (markOnly) {
+    $('invite-reward-preview').textContent = count > 1
+      ? '仅标记 ' + count + ' 人：树上显示角标，不扣 199、不占左右位、不发直推奖。'
+      : '仅标记：树上显示角标，不扣 199、不占左右位、不发直推奖。';
+  } else if (levels > 1) {
+    $('invite-reward-preview').textContent = '将生成 ' + levels + ' 层、约 ' + total + ' 人并逐笔结算。首层：' +
+      sim.describeNextInvite(id);
+  } else if (count > 1) {
+    $('invite-reward-preview').textContent = '将依次邀请 ' + count + ' 人并各自结算。' + sim.describeNextInvite(id);
+  } else {
+    $('invite-reward-preview').textContent = sim.describeNextInvite(id);
+  }
+  $('invite-submit').textContent = markOnly
+    ? (count > 1 ? '确认仅标记 ' + count + ' 人' : '确认仅标记')
+    : (total > 1 ? '确认邀请约 ' + total + ' 人并模拟下单' : '确认邀请并模拟下单');
   $('invite-submit').disabled = false;
   $('invite-error').hidden = true;
 }
@@ -518,6 +596,31 @@ $('node-join').addEventListener('click', () => {
     renderAll();
   } catch (error) { showToast(error.message); }
 });
+
+$('rate-save').addEventListener('click', () => {
+  try {
+    const partial = {};
+    document.querySelectorAll('[data-rate-key]').forEach(input => {
+      partial[input.dataset.rateKey] = input.value;
+    });
+    sim.setRewardRates(partial);
+    syncRateInputs();
+    renderUser();
+    showToast('奖金比例已保存，之后新订单按新比例结算');
+  } catch (error) {
+    $('rate-ops-hint').textContent = error.message;
+    showToast(error.message);
+  }
+});
+
+$('rate-reset').addEventListener('click', () => {
+  sim.setRewardRates(DEFAULT_REWARD_RATES);
+  syncRateInputs();
+  renderUser();
+  $('rate-ops-hint').textContent = '已恢复默认比例；之后新订单按默认结算。';
+  showToast('已恢复默认奖金比例');
+});
+
 $('tree').addEventListener('click', event => {
   const remove = event.target.closest('[data-delete]');
   if (remove) { openDeleteDialog(remove.dataset.delete); return; }
@@ -593,18 +696,25 @@ $('page-next').addEventListener('click', () => { page++; renderLedger(); });
 
 $('invite-open').addEventListener('click', () => {
   $('invite-referrer').innerHTML = referrerOptions();
-  // 当前选中节点若未入团或为复投点，退回根节点张三。
+  // 当前选中未入团则退回根；V2 允许选中复投点作为挂点推荐人。
   const picked = sim.get(selectedId);
-  $('invite-referrer').value = picked && picked.joined && !picked.reentry ? selectedId : ROOT_ID;
+  const allowReentryPick = sim.slideMode === 'ternary_biz_v2' && picked?.reentry;
+  $('invite-referrer').value = picked && picked.joined && (!picked.reentry || allowReentryPick)
+    ? selectedId
+    : ROOT_ID;
   $('invite-name').value = '';
+  $('invite-count').value = '1';
+  $('invite-levels').value = '1';
   $('invite-mark-only').checked = false;
   updateInvitePreview();
   $('invite-dialog').showModal();
-  $('invite-name').focus();
+  $('invite-count').focus();
 });
 $('invite-close').addEventListener('click', () => $('invite-dialog').close());
 $('invite-referrer').addEventListener('change', updateInvitePreview);
 $('invite-mark-only').addEventListener('change', updateInvitePreview);
+$('invite-count').addEventListener('input', updateInvitePreview);
+$('invite-levels').addEventListener('input', updateInvitePreview);
 $('invite-name').addEventListener('input', () => { $('invite-error').hidden = true; });
 $('invite-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -613,23 +723,48 @@ $('invite-form').addEventListener('submit', event => {
   submit.disabled = true;
   try {
     const referrerId = $('invite-referrer').value;
-    const name = $('invite-name').value;
+    const count = inviteCount();
+    const levels = inviteLevels();
+    if (count == null) throw new Error('每层人数须为 1–20 的整数。');
+    if (levels == null) throw new Error('向下层数须为 1–5 的整数。');
     const markOnly = $('invite-mark-only').checked;
-    if (markOnly) {
-      const created = sim.addMarkedUser(referrerId, name);
-      selectedId = created.id;
-      page = 0;
-      $('invite-dialog').close();
-      renderAll();
-      showToast(created.id + ' 已仅标记（未入团）');
-    } else {
-      const order = sim.addUser(referrerId, name);
-      selectedId = referrerId; // 继续观察推荐人的收益，方便连续邀请。
-      page = 0;
-      $('invite-dialog').close();
-      renderAll();
-      showToast(order.buyerId + ' 已加入 · 模拟扣款 199 元 · 奖金已结算');
+    if (markOnly && levels > 1) throw new Error('仅标记模式只支持 1 层。');
+    const total = projectedInviteTotal(count, levels);
+    if (total > MAX_BATCH_INVITES) {
+      throw new Error('预计新增 ' + total + ' 人，超过上限 ' + MAX_BATCH_INVITES + '，请减小人数或层数。');
     }
+    const customName = count === 1 && levels === 1 ? $('invite-name').value : '';
+    const created = [];
+    let frontier = [referrerId];
+    for (let level = 0; level < levels; level++) {
+      const next = [];
+      for (const parent of frontier) {
+        for (let i = 0; i < count; i++) {
+          const name = level === 0 && i === 0 ? customName : '';
+          if (markOnly) {
+            const id = sim.addMarkedUser(parent, name).id;
+            created.push(id);
+            next.push(id);
+          } else {
+            const id = sim.addUser(parent, name).buyerId;
+            created.push(id);
+            next.push(id);
+          }
+        }
+      }
+      frontier = next;
+    }
+    selectedId = referrerId;
+    page = 0;
+    $('invite-dialog').close();
+    renderAll();
+    const preview = created.length <= 8 ? created.join('、') : created.slice(0, 6).join('、') + '…等 ' + created.length + ' 人';
+    showToast(markOnly
+      ? (created.length === 1 ? created[0] + ' 已仅标记（未入团）' : '已仅标记 ' + created.length + ' 人：' + preview)
+      : (created.length === 1
+        ? created[0] + ' 已加入 · 模拟扣款 199 元 · 奖金已结算'
+        : '已邀请 ' + created.length + ' 人（' + levels + ' 层 × 每层 ' + count + '）· ' + preview +
+          ' · 共模拟扣款 ' + money(PRICE * created.length)));
   } catch (error) {
     $('invite-error').textContent = error.message;
     $('invite-error').hidden = false;

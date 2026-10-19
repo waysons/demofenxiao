@@ -173,8 +173,8 @@ test('A 邀 B1/B2/B3 后 B3 邀满两人：A 已是团长仍拿订单奖（对�
   assert.equal(sim.inviteOrderedRealChildren('张三').indexOf('B3'), 2);
   const second = sim.addUser('B3', 'C2');
   assert.equal(sim.role('B3'), '普通');
-  assert.equal(amount(second, '张三', 'order'), 2985);
-  assert.equal(sim.get('张三').wallet.order, 2985);
+  assert.equal(amount(second, '张三', 'order'), 1990);
+  assert.equal(sim.get('张三').wallet.order, 1990);
 });
 
 test('双轨：第 3 邀请滑落后，其第 2 直推仍给邀请人订单奖', () => {
@@ -187,7 +187,7 @@ test('双轨：第 3 邀请滑落后，其第 2 直推仍给邀请人订单奖',
   assert.equal(sim.role('张三'), '团长');
   sim.addUser('B3', 'C1');
   const second = sim.addUser('B3', 'C2');
-  assert.equal(amount(second, '张三', 'order'), 2985);
+  assert.equal(amount(second, '张三', 'order'), 1990);
 });
 
 test('B3 成为团长后，其下扶持区再凑齐两人时 A 被截流拿不到订单奖', () => {
@@ -197,15 +197,15 @@ test('B3 成为团长后，其下扶持区再凑齐两人时 A 被截流拿不�
   sim.addUser('张三', 'B3');
   sim.addUser('B3', 'C1');
   sim.addUser('B3', 'C2');
-  assert.equal(sim.get('张三').wallet.order, 2985);
+  assert.equal(sim.get('张三').wallet.order, 1990);
   sim.addUser('B3', 'C3');
   assert.equal(sim.role('B3'), '团长');
   assert.equal(sim.inviteOrderedRealChildren('B3').indexOf('C3'), 2);
   sim.addUser('C3', 'D1');
   const blocked = sim.addUser('C3', 'D2');
   assert.equal(amount(blocked, '张三', 'order'), 0);
-  assert.equal(sim.get('张三').wallet.order, 2985);
-  assert.equal(amount(blocked, 'B3', 'order'), 2985);
+  assert.equal(sim.get('张三').wallet.order, 1990);
+  assert.equal(amount(blocked, 'B3', 'order'), 1990);
 });
 
 test('代理奖按下单时等级结算并在删除后重放', () => {

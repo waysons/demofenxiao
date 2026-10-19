@@ -40,6 +40,16 @@
     .node-card:has(.node-marked) { border-color: #6b5a32; }
     .group-dot { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: #192439; color: #5e708e; border: 1px solid #2d3b51; font-size: 10px; }
     .group-dot.filled { color: #a8d1ff; border-color: #446dab; background: #1b3b62; }
+    /* 操作中心顶部：滑落版本 + 新增下线，滚动左侧时保持可见 */
+    .control-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      margin: -1.25rem -1.25rem 0;
+      padding: 1.25rem 1.25rem 0.75rem;
+      background: linear-gradient(180deg, #152033 85%, #152033cc 100%);
+      border-bottom: 1px solid #2a3a52;
+    }
     .tree-stage { position: relative; overflow: hidden; height: 80vh; height: 80dvh; background-color: #0d1421; background-image: radial-gradient(#2b385144 .8px, transparent .8px); background-size: 20px 20px; cursor: grab; touch-action: none; user-select: none; }
     .tree-stage.dragging, .tree-stage.dragging * { cursor: grabbing !important; }
     .tree-canvas { position: absolute; top: 0; left: 50%; width: max-content; min-width: 100%; transform-origin: 50% 0; transform: translate(calc(-50% + var(--pan-x, 0px)), var(--pan-y, 0px)) scale(var(--tree-scale, 1)); }
