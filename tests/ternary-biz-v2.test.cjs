@@ -88,7 +88,7 @@ test('V2：第 4 人滑到 B1 的 L，直推奖仍给邀请人', () => {
   assert.equal(sim.childSlot('B1', 'B4'), 0);
   assert.equal(amount(o4, '张三', 'direct'), 4975);
   assert.equal(amount(o4, 'B1', 'direct'), 0);
-  assert.ok(o4.zone === 'binary_slide' || o4.zone === 'v2_slide' || o4.zone === 'group');
+  assert.equal(o4.zone, 'v2_slide');
 });
 
 function formSevenV2(sim, root = '张三') {
@@ -135,4 +135,25 @@ test('V2：复投点下可挂真人；直推奖给邀请原号；复投无 payou
   assert.equal(amount(order, '张三', 'direct'), 4975);
   assert.equal(amount(order, reId, 'direct'), 0);
   assert.equal(sim.income(reId), 0);
+});
+
+test('V2：复投点前 3 人挂本点，第 4 人 realChildren 已满 3 → groupSlotOpen 滑落', () => {
+  const sim = fresh();
+  formSevenV2(sim);
+  const reId = '张三:2';
+  for (const id of ['X1', 'X2', 'X3']) {
+    const o = sim.addUser(reId, id);
+    assert.equal(sim.get(id).referrerId, reId);
+    assert.notEqual(o.zone, 'v2_slide');
+  }
+  assert.equal(sim.realChildren(reId).length, 3);
+  const expected = sim.groupSlotOpen(reId).id;
+  assert.notEqual(expected, reId);
+  const o4 = sim.addUser(reId, 'X4');
+  assert.equal(sim.get('X4').referrerId, expected);
+  assert.equal(sim.get('X4').inviteReferrerId, '张三');
+  assert.equal(sim.realChildren(reId).length, 3); // 不再堆在复投点下
+  assert.equal(o4.zone, 'v2_slide');
+  assert.equal(amount(o4, '张三', 'direct'), 4975);
+  assert.match(sim.describeNextInvite(reId), /前 3 挂本复投点，满则 L\/R DFS 滑落；邀请记原号/);
 });

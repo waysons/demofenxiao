@@ -398,7 +398,7 @@ class Simulation {
     if (referrer.reentry && !this.usesTernaryBizV2()) return '复投点不能再邀请下级。请改选真人推荐人。';
     if (referrer.reentry) {
       return '点选复投点 ' + referrer.id + '：邀请关系记原号 ' + referrer.userId +
-        '，新人直接挂在本复投点下（复投点零收益，直推奖等仍发给原号）。';
+        '；前 3 挂本复投点，满则 L/R DFS 滑落；邀请记原号（复投点零收益，直推奖等仍发给原号）。';
     }
     const invitePos = this.inviteOrderedRealChildren(referrerId).length + 1;
     const rates = this.rates;
@@ -550,10 +550,15 @@ class Simulation {
     return referrer;
   }
 
+  // V2 点选复投点：本复投点真人子数 <3 直接挂它（L+R+扶持），满 3 后从复投点起 L/R DFS 滑落
+  resolveClickedReentryHost(clicked) {
+    return this.realChildren(clicked.id).length < 3 ? clicked : this.groupSlotOpen(clicked.id);
+  }
+
   addMarkedUser(referrerId, requestedId = '') {
     const clicked = this.get(referrerId);
-    // V2 点选复投点：树上挂该复投点，邀请关系记原号
-    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? clicked : null;
+    // V2 点选复投点：树上挂点按宽度 3 + 滑落解析，邀请关系记原号
+    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? this.resolveClickedReentryHost(clicked) : null;
     const host = forcedHost || this.resolveInviteHost(referrerId);
     const { id, inviteReferrerId } = this._resolveInviteId(referrerId, requestedId, host.id);
     // 树上挂点与入团邀请一致（成团后挂复投点）；邀请关系仍记原号
@@ -606,9 +611,9 @@ class Simulation {
   }
 
   addUser(referrerId, requestedId = '', options = {}) {
-    // V2 点选复投点：邀请关系记原号，树上直接挂该复投点（不再滑落）
+    // V2 点选复投点：邀请关系记原号；前 3 挂本复投点，满则从复投点 groupSlotOpen 滑落
     const clicked = this.get(referrerId);
-    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? clicked : null;
+    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? this.resolveClickedReentryHost(clicked) : null;
     // 先解析挂点（纯商业：第 4 人起 → 最新复投点），再取名
     const hostPreview = forcedHost || this.resolveInviteHost(referrerId);
     const { referrer, id, inviteReferrerId } = this._resolveInviteId(referrerId, requestedId, hostPreview.id);
@@ -620,6 +625,7 @@ class Simulation {
     let slid = false;
     if (forcedHost) {
       host = forcedHost;
+      slid = host.id !== clicked.id; // 滑离被点选的复投点 → 记 v2_slide
     } else if (this.usesBinaryInvite()) {
       host = this.binaryOpen(inviteReferrerId);
       slid = host.id !== inviteReferrerId;
