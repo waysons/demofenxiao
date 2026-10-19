@@ -61,3 +61,32 @@ test('V2：payOn 跳过复投点入账', () => {
   assert.equal(sim.income(re.id), before);
   assert.equal(order.payouts.length, 0);
 });
+
+const amount = (order, id, type) => order.payouts.filter(p => p.userId === id && p.type === type).reduce((sum, p) => sum + p.cents, 0);
+
+test('V2：未成团时第 1–2 拼团区、第 3 扶持区', () => {
+  const sim = fresh();
+  const o1 = sim.addUser('张三', 'B1');
+  const o2 = sim.addUser('张三', 'B2');
+  const o3 = sim.addUser('张三', 'B3');
+  assert.equal(o1.zone, 'group');
+  assert.equal(o2.zone, 'group');
+  assert.equal(o3.zone, 'support');
+  assert.deepEqual([...sim.realChildren('张三')], ['B1', 'B2', 'B3']);
+  assert.equal(sim.groupMemberIds('张三').includes('B3'), false);
+  assert.equal(sim.get('B3').inviteReferrerId, '张三');
+});
+
+test('V2：第 4 人滑到 B1 的 L，直推奖仍给邀请人', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
+  const o4 = sim.addUser('张三', 'B4');
+  assert.equal(sim.get('B4').referrerId, 'B1');
+  assert.equal(sim.get('B4').inviteReferrerId, '张三');
+  assert.equal(sim.childSlot('B1', 'B4'), 0);
+  assert.equal(amount(o4, '张三', 'direct'), 4975);
+  assert.equal(amount(o4, 'B1', 'direct'), 0);
+  assert.ok(o4.zone === 'binary_slide' || o4.zone === 'v2_slide' || o4.zone === 'group');
+});

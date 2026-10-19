@@ -418,6 +418,13 @@ class Simulation {
           ? '左右位，计入该推荐人的七人团'
           : '扶持区（第 3 人不滑落），不计入该推荐人自己的七人团';
       }
+    } else if (this.usesTernaryBizV2()) {
+      const treeCount = this.realChildren(referrerId).length;
+      zone = treeCount < 3
+        ? (treeCount < 2
+          ? '左右位（挂在本人树下），计入该推荐人的七人团'
+          : '本人第 3 支（树上挂点，对本人仍属扶持区、不计七人团）')
+        : '商业 V2 滑落：本人树已满 3，新人挂到团队内 L/R DFS 第一个未满 2 的空位';
     } else {
       // left / alternate：第 3+ 进本人扶持区
       zone = invitePos <= 2 ? '左右位，计入该推荐人的七人团' : '扶持区，不计入该推荐人自己的七人团';
@@ -433,9 +440,11 @@ class Simulation {
         ? '成团后按三三复制找空位滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）'
         : this.slideMode === 'ternary_biz'
           ? '成团后复投滑到最左下方并可计团；第 3 人仍进原号扶持区，第 4 人起才挂到最新复投点分支下'
-          : this.slideMode === 'alternate'
-            ? '成团后按左右轮换滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）'
-            : '成团后向左链最底滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）';
+          : this.slideMode === 'ternary_biz_v2'
+            ? '成团后复投按 L/R DFS 找空位；第 3 人仍进原号扶持区，第 4 人起才滑落挂点（复投可挂点、零收益）'
+            : this.slideMode === 'alternate'
+              ? '成团后按左右轮换滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）'
+              : '成团后向左链最底滑落 1 张复投（复投进扶持区，不计入七人团、不发直推奖、不占左右位）';
     return '第 ' + invitePos + ' 位邀请直推（' + zone + '）。推荐人获得直推奖 ' + (direct / 100).toFixed(2) +
       ' 元。' + orderNote + ' 七人团须严格 1+2+4 才发一次拼团奖（' + rates.group + '%），' + slideNote +
       '。邀请直推满 3 人即为团长。双方都是团长后，按该下级拼团奖的 ' + rates.management + '% 给邀请上级一次管理奖。';
@@ -517,6 +526,11 @@ class Simulation {
       const nextPos = this.inviteOrderedRealChildren(inviteReferrerId).length + 1;
       if (reentryId && nextPos >= 4) return this.get(reentryId);
     }
+    // V2：预览挂点与 addUser 一致（满 3 则 groupSlotOpen）
+    if (this.usesTernaryBizV2()) {
+      if (this.realChildren(inviteReferrerId).length < 3) return referrer;
+      return this.groupSlotOpen(inviteReferrerId);
+    }
     return referrer;
   }
 
@@ -591,6 +605,15 @@ class Simulation {
       slid = host.id !== inviteReferrerId;
     } else if (this.usesTernaryBiz()) {
       host = this.resolveInviteHost(inviteReferrerId);
+    } else if (this.usesTernaryBizV2()) {
+      const treeCount = this.realChildren(inviteReferrerId).length;
+      if (treeCount < 3) {
+        host = this.get(inviteReferrerId);
+        slid = false;
+      } else {
+        host = this.groupSlotOpen(inviteReferrerId);
+        slid = host.id !== inviteReferrerId;
+      }
     }
 
     const positionAncestors = this.ancestors(host.id, 'referrerId');
@@ -622,9 +645,13 @@ class Simulation {
     const invitePosition = previousInviteCount + 1;
     const treeSlot = this.realChildren(host.id).indexOf(id);
     let zone;
-    if (slid) zone = this.usesTernaryInvite() ? 'ternary_slide' : 'binary_slide';
-    // 纯商业：区席按挂点树位（成团后挂复投支时不能用原号邀请序号）
-    else if (this.usesTernaryBiz()) zone = treeSlot < 2 ? 'group' : 'support';
+    if (slid) {
+      zone = this.usesTernaryInvite() ? 'ternary_slide'
+        : this.usesTernaryBizV2() ? 'v2_slide'
+          : 'binary_slide';
+    }
+    // 纯商业 / V2：区席按挂点树位（成团后挂复投支时不能用原号邀请序号）
+    else if (this.usesTernaryBiz() || this.usesTernaryBizV2()) zone = treeSlot < 2 ? 'group' : 'support';
     else if (!this.usesWideInvite() && invitePosition > 2) zone = 'support';
     else zone = treeSlot < 2 ? 'group' : 'support';
     order.position = invitePosition;
@@ -640,7 +667,9 @@ class Simulation {
     const pay = (recipient, type, cents, note, sourceId) => this.payOn(order, recipient, type, cents, note, sourceId);
     const underReentry = this.usesTernaryBiz() && host.reentry;
     const placeNote = slid
-      ? (this.usesTernaryInvite() ? '（三轨滑落挂在 ' + host.id + '）' : '（双轨滑落挂在 ' + host.id + '）')
+      ? (this.usesTernaryInvite() ? '（三轨滑落挂在 ' + host.id + '）'
+        : this.usesTernaryBizV2() ? '（V2 滑落挂在 ' + host.id + '）'
+          : '（双轨滑落挂在 ' + host.id + '）')
       : underReentry
         ? '（第 4 人起挂在复投点 ' + host.id + '）'
         : '';
