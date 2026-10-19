@@ -157,3 +157,15 @@ test('V2：复投点前 3 人挂本点，第 4 人 realChildren 已满 3 → gro
   assert.equal(amount(o4, '张三', 'direct'), 4975);
   assert.match(sim.describeNextInvite(reId), /前 3 挂本复投点，满则 L\/R DFS 滑落；邀请记原号/);
 });
+
+test('V2：成团后再邀不强制挂最新复投点，按 groupSlotOpen', () => {
+  const sim = fresh();
+  formSevenV2(sim);
+  assert.ok(sim.latestReentryId('张三'));
+  const before = sim.groupSlotOpen('张三').id;
+  const order = sim.addUser('张三', 'X9');
+  assert.equal(sim.get('X9').referrerId, before);
+  assert.equal(sim.get('X9').inviteReferrerId, '张三');
+  assert.equal(sim.get('张三').children.includes('X9'), false);
+  assert.equal(amount(order, '张三', 'direct'), 4975);
+});
