@@ -90,3 +90,49 @@ test('V2：第 4 人滑到 B1 的 L，直推奖仍给邀请人', () => {
   assert.equal(amount(o4, 'B1', 'direct'), 0);
   assert.ok(o4.zone === 'binary_slide' || o4.zone === 'v2_slide' || o4.zone === 'group');
 });
+
+function formSevenV2(sim, root = '张三') {
+  sim.addUser(root, 'B1');
+  sim.addUser(root, 'B2');
+  sim.addUser(root, 'B3');
+  sim.addUser('B1', 'C1');
+  sim.addUser('B1', 'C2');
+  sim.addUser('B2', 'C3');
+  return sim.addUser('B2', 'C4');
+}
+
+test('V2：1+2+4 成团发拼团奖；复投挂 L/R 可计团且钱包为 0', () => {
+  const sim = fresh();
+  const last = formSevenV2(sim);
+  assert.equal(amount(last, '张三', 'group'), 3980);
+  assert.equal(sim.get('张三').groupAwarded, true);
+  const re = sim.get('张三:2');
+  assert.ok(re?.reentry);
+  assert.equal(re.countsForGroup, true);
+  assert.equal(sim.income('张三:2'), 0);
+  assert.equal(sim.childSlot(re.referrerId, '张三:2') < 2, true);
+});
+
+test('V2：B3 直推满 2 人时 A 拿订单奖', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
+  sim.addUser('B3', 'D1');
+  const o = sim.addUser('B3', 'D2');
+  assert.equal(amount(o, '张三', 'order'), 2985);
+});
+
+test('V2：复投点下可挂真人；直推奖给邀请原号；复投无 payout', () => {
+  const sim = fresh();
+  formSevenV2(sim);
+  const reId = '张三:2';
+  assert.ok(sim.get(reId)?.reentry);
+  // 从复投点发起：邀请人应记原号
+  const order = sim.addUser(reId, 'X1');
+  assert.equal(sim.get('X1').inviteReferrerId, '张三');
+  assert.equal(sim.get('X1').referrerId, reId);
+  assert.equal(amount(order, '张三', 'direct'), 4975);
+  assert.equal(amount(order, reId, 'direct'), 0);
+  assert.equal(sim.income(reId), 0);
+});

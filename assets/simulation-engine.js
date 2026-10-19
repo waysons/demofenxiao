@@ -313,23 +313,28 @@ class Simulation {
   ternaryOpen(id) { return this.wideOpen(id, 3, '三三复制'); }
 
   // V2：L/R 宽 2，DFS 先左支向下再右（先上下、再左右）
-  groupSlotOpen(id) {
+  // 第一遍：支层（相对起点深度≥1）L/R 已满则不再往叶层钻，让位给下一同级支（B1 满 → B2）。
+  // 第二遍：各支都满（如已成团）后才允许往叶层深入找空位（C1 …），供成团后复投 / 再邀使用。
+  // skipReentry：复投自身不能挂在复投下，此时不返回复投点（仍可穿过它继续往下找）。
+  groupSlotOpen(id, { skipReentry = false } = {}) {
     const start = this.get(id);
     if (!start) throw new Error('滑落起点不存在');
     const self = this;
-    function dfs(node) {
-      if (!node) return null;
-      const counted = self.groupCountedChildren(node.id);
-      if (counted.length < 2) return node;
-      // 支层（相对起点深度≥1）L/R 已满则不再往叶层钻，交给 DFS 下一同级支
-      if (node.depth - start.depth >= 1) return null;
-      for (const childId of counted.slice(0, 2)) {
-        const found = dfs(self.get(childId));
-        if (found) return found;
-      }
-      return null;
-    }
-    const hit = dfs(start);
+    const search = limitBranch => {
+      const dfs = node => {
+        if (!node) return null;
+        const counted = self.groupCountedChildren(node.id);
+        if (counted.length < 2 && !(skipReentry && node.reentry)) return node;
+        if (limitBranch && node.depth - start.depth >= 1) return null;
+        for (const childId of counted.slice(0, 2)) {
+          const found = dfs(self.get(childId));
+          if (found) return found;
+        }
+        return null;
+      };
+      return dfs(start);
+    };
+    const hit = search(true) || search(false);
     if (!hit) throw new Error('商业V2滑落未找到空位');
     return hit;
   }
@@ -338,7 +343,7 @@ class Simulation {
   findSlideParent(exitedId) {
     if (this.slideMode === 'binary') return this.binaryOpen(exitedId);
     if (this.slideMode === 'ternary') return this.ternaryOpen(exitedId);
-    if (this.slideMode === 'ternary_biz_v2') return this.groupSlotOpen(exitedId);
+    if (this.slideMode === 'ternary_biz_v2') return this.groupSlotOpen(exitedId, { skipReentry: true });
     // ternary_biz / left：最左下方
     if (this.slideMode === 'ternary_biz' || this.slideMode === 'left') {
       return this.leftmostOpen(exitedId);
@@ -390,7 +395,11 @@ class Simulation {
   describeNextInvite(referrerId) {
     const referrer = this.get(referrerId);
     if (!referrer) return '请先选择推荐人。';
-    if (referrer.reentry) return '复投点不能再邀请下级。请改选真人推荐人。';
+    if (referrer.reentry && !this.usesTernaryBizV2()) return '复投点不能再邀请下级。请改选真人推荐人。';
+    if (referrer.reentry) {
+      return '点选复投点 ' + referrer.id + '：邀请关系记原号 ' + referrer.userId +
+        '，新人直接挂在本复投点下（复投点零收益，直推奖等仍发给原号）。';
+    }
     const invitePos = this.inviteOrderedRealChildren(referrerId).length + 1;
     const rates = this.rates;
     const direct = this.percentCents(rates.direct);
@@ -504,17 +513,24 @@ class Simulation {
 
   // nameParentId：自动取名时用的挂点（纯商业成团后为最新复投点）。
   _resolveInviteId(referrerId, requestedId, nameParentId = null) {
-    const referrer = this.get(referrerId);
+    let referrer = this.get(referrerId);
     if (!referrer) throw new Error('直接推荐人不存在，请重新选择。');
-    if (referrer.reentry) throw new Error('复投点不能再邀请下级。');
+    let inviteReferrerId = referrerId;
+    if (referrer.reentry) {
+      // V2：点选复投点 → 邀请关系记原号
+      if (!this.usesTernaryBizV2()) throw new Error('复投点不能再邀请下级。');
+      inviteReferrerId = referrer.userId;
+      referrer = this.get(inviteReferrerId);
+      if (!referrer || referrer.reentry) throw new Error('复投点原号不存在。');
+    }
     if (!referrer.joined) throw new Error('推荐人尚未入团，请先模拟购买入团后再邀请或标记下级。');
-    const nameFrom = nameParentId || referrerId;
+    const nameFrom = nameParentId || inviteReferrerId;
     const id = requestedId.trim().toUpperCase() || this.nextName(nameFrom);
     if (!/^[A-Z]{1,8}[1-9]\d{0,5}$/.test(id)) {
       throw new Error('账号格式为大写字母组 + 正整数，例如 B1、C12；最多 8 位字母和 6 位数字。');
     }
     if (this.users.has(id)) throw new Error('该账号已存在，请使用其他名称。');
-    return { referrer, id };
+    return { referrer, id, inviteReferrerId };
   }
 
   // 纯商业版：有复投后，第 1–3 人仍挂原号（第 3=扶持区）；第 4 人起才挂最新复投点。
@@ -535,11 +551,14 @@ class Simulation {
   }
 
   addMarkedUser(referrerId, requestedId = '') {
-    const host = this.resolveInviteHost(referrerId);
-    const { referrer, id } = this._resolveInviteId(referrerId, requestedId, host.id);
+    const clicked = this.get(referrerId);
+    // V2 点选复投点：树上挂该复投点，邀请关系记原号
+    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? clicked : null;
+    const host = forcedHost || this.resolveInviteHost(referrerId);
+    const { id, inviteReferrerId } = this._resolveInviteId(referrerId, requestedId, host.id);
     // 树上挂点与入团邀请一致（成团后挂复投点）；邀请关系仍记原号
     const user = this.makeUser(id, host.id, host.depth + 1);
-    user.inviteReferrerId = referrerId;
+    user.inviteReferrerId = inviteReferrerId;
     user.marketMarked = true;
     user.marketMarkedAt = this._defaultJoinAt ?? (this._defaultJoinAt = Date.now());
     host.markedChildren = host.markedChildren || [];
@@ -587,17 +606,21 @@ class Simulation {
   }
 
   addUser(referrerId, requestedId = '', options = {}) {
-    const inviteReferrerId = referrerId;
+    // V2 点选复投点：邀请关系记原号，树上直接挂该复投点（不再滑落）
+    const clicked = this.get(referrerId);
+    const forcedHost = this.usesTernaryBizV2() && clicked?.reentry ? clicked : null;
     // 先解析挂点（纯商业：第 4 人起 → 最新复投点），再取名
-    let hostPreview = this.resolveInviteHost(inviteReferrerId);
-    const { referrer, id } = this._resolveInviteId(referrerId, requestedId, hostPreview.id);
+    const hostPreview = forcedHost || this.resolveInviteHost(referrerId);
+    const { referrer, id, inviteReferrerId } = this._resolveInviteId(referrerId, requestedId, hostPreview.id);
     const previousInviteCount = this.inviteOrderedRealChildren(inviteReferrerId).length;
 
     // 宽轨邀请：二二最多 2 / 三三最多 3；满则 BFS 找空位。对照 left/alternate 仍第 3+ 进本人扶持区。
     // 纯商业：有复投后第 1–3 挂原号，第 4 人起挂最新复投点。
     let host = referrer;
     let slid = false;
-    if (this.usesBinaryInvite()) {
+    if (forcedHost) {
+      host = forcedHost;
+    } else if (this.usesBinaryInvite()) {
       host = this.binaryOpen(inviteReferrerId);
       slid = host.id !== inviteReferrerId;
     } else if (this.usesTernaryInvite()) {
@@ -723,7 +746,7 @@ class Simulation {
   }
 
   addReentry({ positionId, ownerId, round, parent, exited }) {
-    if (parent.reentry) throw new Error('复投点不能挂下级');
+    if (parent.reentry) throw new Error('复投点不能挂复投下级');
     if (this.users.has(positionId)) throw new Error('复投点已存在');
     const user = this.makeUser(positionId, parent.id, parent.depth + 1);
     user.reentry = true;
