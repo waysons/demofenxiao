@@ -69,6 +69,17 @@ class Simulation {
       : [];
   }
 
+  // 树上占座数（V2 宽度 3）：已入团真人 + 计团复投（占 L/R）；不计团的复投属扶持滑落，不占座。
+  treeOccupancy(id) {
+    const user = this.get(id);
+    if (!user) return 0;
+    return user.children.filter(childId => {
+      const child = this.get(childId);
+      if (!child || !child.joined) return false;
+      return !child.reentry || !!child.countsForGroup;
+    }).length;
+  }
+
   // 邀请侧直推（按入团序）：双轨下第 3 人可挂在别人树上，但仍算邀请人的直推。
   inviteOrderedRealChildren(id) {
     return [...this.users.values()]
@@ -428,7 +439,7 @@ class Simulation {
           : '扶持区（第 3 人不滑落），不计入该推荐人自己的七人团';
       }
     } else if (this.usesTernaryBizV2()) {
-      const treeCount = this.realChildren(referrerId).length;
+      const treeCount = this.treeOccupancy(referrerId);
       zone = treeCount < 3
         ? (treeCount < 2
           ? '左右位（挂在本人树下），计入该推荐人的七人团'
@@ -544,7 +555,7 @@ class Simulation {
     }
     // V2：预览挂点与 addUser 一致（满 3 则 groupSlotOpen）
     if (this.usesTernaryBizV2()) {
-      if (this.realChildren(inviteReferrerId).length < 3) return referrer;
+      if (this.treeOccupancy(inviteReferrerId) < 3) return referrer;
       return this.groupSlotOpen(inviteReferrerId);
     }
     return referrer;
@@ -552,7 +563,7 @@ class Simulation {
 
   // V2 点选复投点：本复投点真人子数 <3 直接挂它（L+R+扶持），满 3 后从复投点起 L/R DFS 滑落
   resolveClickedReentryHost(clicked) {
-    return this.realChildren(clicked.id).length < 3 ? clicked : this.groupSlotOpen(clicked.id);
+    return this.treeOccupancy(clicked.id) < 3 ? clicked : this.groupSlotOpen(clicked.id);
   }
 
   addMarkedUser(referrerId, requestedId = '') {
@@ -590,12 +601,17 @@ class Simulation {
     const user = this.get(id);
     if (!user) throw new Error('该账号不存在。');
     if (!user.marketMarked || user.joined) throw new Error('须为已标记且未入团的节点。');
-    const referrerId = user.referrerId;
-    const parent = this.get(referrerId);
+    // 先记下树上挂点与邀请人，再从 users 删除占位
+    const hostId = user.referrerId;
+    const inviteId = user.inviteReferrerId || hostId;
+    const parent = this.get(hostId);
     if (parent) parent.markedChildren = parent.markedChildren.filter(item => item !== id);
     this.users.delete(id);
     const options = joinedAtMs != null ? { joinedAt: joinedAtMs } : {};
-    return this.addUser(referrerId, id, options);
+    // V2 且标记挂在复投点下：沿用 hostId 走 forcedHost（邀请人自动记原号）；
+    // 其余按邀请人重新解析挂点，滑落标记入团后直推奖仍给邀请人而非树上挂点
+    if (this.usesTernaryBizV2() && this.get(hostId)?.reentry) return this.addUser(hostId, id, options);
+    return this.addUser(inviteId, id, options);
   }
 
   // 改时间仅更新展示与重放快照，不触发换位、不重发奖。
@@ -635,7 +651,7 @@ class Simulation {
     } else if (this.usesTernaryBiz()) {
       host = this.resolveInviteHost(inviteReferrerId);
     } else if (this.usesTernaryBizV2()) {
-      const treeCount = this.realChildren(inviteReferrerId).length;
+      const treeCount = this.treeOccupancy(inviteReferrerId);
       if (treeCount < 3) {
         host = this.get(inviteReferrerId);
         slid = false;

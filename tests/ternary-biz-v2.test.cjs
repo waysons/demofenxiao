@@ -169,3 +169,39 @@ test('V2：成团后再邀不强制挂最新复投点，按 groupSlotOpen', () =
   assert.equal(sim.get('张三').children.includes('X9'), false);
   assert.equal(amount(order, '张三', 'direct'), 4975);
 });
+
+test('V2：叶点挂计团复投后树占座=复投+2 真人，第 3 个真人滑落不堆第 4 席', () => {
+  const sim = fresh();
+  formSevenV2(sim);
+  const re = sim.get('张三:2');
+  assert.equal(re.referrerId, 'C1');
+  assert.equal(re.countsForGroup, true);
+  assert.equal(sim.treeOccupancy('C1'), 1);
+  sim.addUser('C1', 'D1');
+  sim.addUser('C1', 'D2');
+  assert.equal(sim.get('D1').referrerId, 'C1');
+  assert.equal(sim.get('D2').referrerId, 'C1');
+  assert.equal(sim.realChildren('C1').length, 2);
+  assert.equal(sim.treeOccupancy('C1'), 3);
+  const o3 = sim.addUser('C1', 'D3');
+  assert.notEqual(sim.get('D3').referrerId, 'C1');
+  assert.equal(sim.get('D3').inviteReferrerId, 'C1');
+  assert.equal(o3.zone, 'v2_slide');
+  assert.equal(sim.treeOccupancy('C1'), 3);
+  assert.equal(sim.realChildren('C1').length, 2);
+});
+
+test('V2：滑落标记入团后 inviteReferrer 不丢，直推奖给邀请人', () => {
+  const sim = fresh();
+  sim.addUser('张三', 'B1');
+  sim.addUser('张三', 'B2');
+  sim.addUser('张三', 'B3');
+  const mark = sim.addMarkedUser('张三', 'M1');
+  assert.equal(mark.referrerId, 'B1');
+  assert.equal(mark.inviteReferrerId, '张三');
+  const order = sim.joinMarkedUser('M1');
+  assert.equal(sim.get('M1').referrerId, 'B1');
+  assert.equal(sim.get('M1').inviteReferrerId, '张三');
+  assert.equal(amount(order, '张三', 'direct'), 4975);
+  assert.equal(amount(order, 'B1', 'direct'), 0);
+});
