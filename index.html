@@ -17,7 +17,7 @@
           <i class="bg-white/80 rounded-sm"></i><i class="bg-white/50 rounded-sm"></i><i class="bg-white/30 rounded-sm"></i>
           <i class="bg-white/50 rounded-sm"></i><i class="bg-white/30 rounded-sm"></i><i class="bg-white/20 rounded-sm"></i>
         </div>
-        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span class="text-xl font-semibold tracking-widest">三三</span><span class="text-xs text-slate-500">拼团分销模拟器</span></div>
+        <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1"><span class="text-xl font-semibold tracking-widest">三三</span><span class="text-xs text-slate-500">拼团分销模拟器</span><span id="slide-mode-badge" class="text-[10px] px-2 py-0.5 rounded-full border border-sky-500/40 text-sky-200">双轨邀请 · 复投不计团</span></div>
       </div>
       <div class="flex items-center gap-4">
         <span class="hidden sm:inline-flex items-center gap-2 text-xs muted"><span class="w-1.5 h-1.5 bg-emerald-400 rounded-full"></span>静态沙盒</span>
@@ -41,6 +41,21 @@
       <aside class="space-y-4 min-w-0">
         <section class="panel p-5" aria-label="控制与用户概览">
           <div class="flex items-center justify-between mb-4"><h2 class="font-semibold text-sm">操作中心</h2><span class="eyebrow">CONTROL</span></div>
+          <div class="rounded-xl border border-slate-700/50 p-3.5 mb-4 space-y-2" aria-label="滑落版本">
+            <div class="flex items-center justify-between gap-2">
+              <p class="text-xs text-slate-300 font-medium">滑落版本</p>
+              <span class="text-[10px] muted">切换会重置模拟</span>
+            </div>
+            <select id="slide-mode" class="field text-xs" aria-label="滑落版本">
+              <option value="binary" selected>二二复制+双轨邀请（默认）</option>
+              <option value="ternary">三三复制+三轨邀请（对照）</option>
+              <option value="ternary_biz">三三纯商业版（扶持区邀请 · 左下复投计团）</option>
+              <option value="ternary_biz_v2">三三复制商业V2（L/R帮扶滑落 · 复投可挂点）</option>
+              <option value="left">对照 · 左链 / 第3人进扶持区</option>
+              <option value="alternate">试验 · 左右轮换复投</option>
+            </select>
+            <p id="slide-mode-hint" class="text-[10px] muted leading-relaxed">默认：邀请侧最多挂 2 人，第 3 人起双轨滑到空位；成团复投另找空位进扶持区（不计团）。</p>
+          </div>
           <label for="operator" class="text-xs muted block mb-2">当前操作人</label>
           <select id="operator" class="field" aria-label="当前操作人"></select>
           <div class="flex items-center gap-3 mt-6"><div id="user-avatar" class="mono flex items-center justify-center w-12 h-12 rounded-xl border border-blue-500/40 bg-blue-500/10 text-blue-200 font-semibold">张三</div><div class="min-w-0 flex-1"><div class="flex items-center gap-2"><h3 id="user-name" class="text-lg font-semibold break-all">张三</h3><span id="user-role" class="role-badge ordinary">普通</span></div><p id="user-parent" class="muted text-[11px] mt-1">直接推荐人 · 无（根节点）</p></div></div>
@@ -90,6 +105,7 @@
             <p><strong class="text-slate-300">初始成员与命名：</strong>系统从“张三”开始，张三没有初始订单。张三的直推依次为 A1、A2、A3…；下一代为 B1、B2…，再往后为 C、D 等字母组，Z 后延续 AA。同代数字全局递增。</p>
             <p><strong class="text-slate-300">拼团区与扶持区：</strong>席位按市场动态：有裂变（名下 ≥1 已入团真人）优先，同档按入团时间新→旧。第 1、2 名已入团真人是左右位，第 3 名起是扶持区。紫色虚线框只标出前两名直推。新单按当前席位结算；已记流水日常不回改，删除分支重放除外。</p>
             <p><strong class="text-slate-300">七人团与团长：</strong>每人的七人团 = 本人 + 前两名直推各自整棵下级树里的已入团成员。本人第 3 名及以后的分支不计入本人的团，但会计入更上级、只要他们落在那位上级的前两枝里面。满 7 人且真人直推满 2 才发一次拼团奖。真人直推满 3 即为团长，与是否七人成团无关。</p>
+            <p><strong class="text-slate-300">三三复制商业V2：</strong>第 3 人扶持区；第 4 人起按最左支 L/R、先上下再左右滑落帮扶；复投可挂点但零收益；成团后再邀不强制挂最新复投点。</p>
             <p><strong class="text-slate-300">直推奖 20%：</strong>每邀请一名新成员，直接推荐人获得实付 × 20%。按 199 元计算是 39.80 元。左右位和扶持区都有，不限第几位。</p>
             <p><strong class="text-slate-300">拼团奖 15%：</strong>七人团人数第一次达到 7 时，给这位成员实付 × 15%，按 199 元是 29.85 元，只发一次。触发成团的是哪一笔订单，就按那一笔的实付计算。</p>
             <p><strong class="text-slate-300">订单奖 10%：</strong>某位成员的已支付直推从 1 人变成 2 人时才触发。从该成员的直接上级向上最多查 8 层：落在某上级第 3 名及以后分支时，给该上级实付 × 10%；左右位跳过并继续向上。例：A 的扶持区 B3 邀满两人，A 拿订单奖（A 已是团长也照拿）。若付款前<strong>支线根</strong>已是团长（如 B3 直推满 3），则截流不再向上发给 A。第 3 名直推下单的当时并不单独发订单奖。</p>

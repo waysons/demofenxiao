@@ -36,6 +36,75 @@ function showToast(message) {
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 5000);
 }
 
+function syncSlideModeUi() {
+  const mode = sim.slideMode || 'binary';
+  const select = $('slide-mode');
+  if (select && select.value !== mode) select.value = mode;
+  const badge = $('slide-mode-badge');
+  const hint = $('slide-mode-hint');
+  if (mode === 'binary') {
+    if (badge) {
+      badge.textContent = '双轨邀请 · 复投不计团';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-sky-500/40 text-sky-200';
+    }
+    if (hint) {
+      hint.textContent = '二二复制+双轨邀请：本人树最多 2 真人，第 3 人起滑到空位占落点 L/R（加速落点成团）；成团复投另按找空位挂扶持区且不计团。';
+    }
+  } else if (mode === 'ternary') {
+    if (badge) {
+      badge.textContent = '三三复制 · 复投不计团';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-violet-500/40 text-violet-200';
+    }
+    if (hint) {
+      hint.textContent = '三三复制+三轨邀请：本人树最多 3 真人，第 4 人起滑到空位；成团复投按未满 3 找空挂扶持区且不计团。七人团仍只认前两支。';
+    }
+  } else if (mode === 'ternary_biz') {
+    if (badge) {
+      badge.textContent = '纯商业 · 左下复投计团';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-rose-500/40 text-rose-200';
+    }
+    if (hint) {
+      hint.textContent = '三三纯商业版：第 1–2 拼团区、第 3 人本人扶持区（不滑落）；成团复投最左下方可计团；第 4 人起才挂到最新复投点分支下。';
+    }
+  } else if (mode === 'ternary_biz_v2') {
+    if (badge) {
+      badge.textContent = '商业V2 · L/R帮扶 · 复投零收益';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-fuchsia-500/40 text-fuchsia-200';
+    }
+    if (hint) {
+      hint.textContent = '三三复制商业V2：第1–2拼团区、第3扶持区；第4人起L/R深度优先滑落帮扶；成团复投同算法可计团可挂点但零收益；成团后再邀不强制挂复投点。';
+    }
+  } else if (mode === 'alternate') {
+    if (badge) {
+      badge.textContent = '试验 · 左右轮换';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-200';
+    }
+    if (hint) hint.textContent = '试验版：奇次左链 / 偶次右链最底挂复投；复投进扶持区，不计入七人团、不占左右位、不发直推奖。';
+  } else {
+    if (badge) {
+      badge.textContent = '左链滑落 · 复投不计团';
+      badge.className = 'text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-300';
+    }
+    if (hint) hint.textContent = '复投滑到左链最底扶持区；不计入七人团（防单链）、不占左右位、不发直推奖。';
+  }
+}
+
+function softResetSimulation(slideMode) {
+  const mode = slideMode || sim.slideMode || 'binary';
+  sim = new Simulation();
+  sim.setSlideMode(mode);
+  selectedId = viewRoot = ROOT_ID;
+  ledgerMode = 'orders';
+  page = 0;
+  expanded.clear();
+}
+
+function orderZoneLabel(order) {
+  if (order.zone === 'group') return '左右位';
+  if (order.zone === 'binary_slide' || order.zone === 'v2_slide') return '滑落帮扶';
+  return '扶持区';
+}
+
 function userOptions() {
   return [...sim.users.values()].map(user => '<option value="' + escapeHTML(user.id) + '">' +
     escapeHTML(user.id) + ' · ' + sim.role(user.id) + '</option>').join('');
@@ -255,12 +324,13 @@ function renderLedger() {
   if (ledgerMode === 'income') {
     $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>来源订单</th><th>奖金类型</th><th>结算说明</th><th class="text-right">入账金额</th></tr></thead><tbody>' + visible.map(({ order, payout }) => '<tr><td><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1">下单人 ' + escapeHTML(order.buyerId) + '</span></td><td><span class="reward-tag reward-tone-' + payout.type + '">' + REWARD_NAMES[payout.type] + '</span></td><td class="muted text-[11px]">' + escapeHTML(payout.note) + '</td><td class="text-right mono text-emerald-300">+' + money(payout.cents) + '</td></tr>').join('') + '</tbody></table></div>';
   } else {
-    $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>订单 / 时间</th><th>下单人</th><th>模拟扣款</th><th>分配详情</th></tr></thead><tbody>' + visible.map(order => '<tr><td class="align-top"><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1 mono">' + order.time + '</span></td><td class="align-top mono">' + escapeHTML(order.buyerId) + (order.type === 'repurchase' ? '<span class="block text-[10px] text-amber-200 mt-1">复购 · 恢复邀请资格</span>' : '<span class="block text-[10px] muted mt-1">推荐 ' + escapeHTML(order.referrerId) + '</span><span class="reward-tag mt-2 reward-tone-' + (order.zone === 'group' ? 'group' : 'order') + '">' + (order.zone === 'group' ? '左右位' : '扶持区') + ' · 第 ' + order.position + ' 位</span>') + '</td><td class="align-top"><span class="mono">−' + money(order.cents) + '</span><span class="block text-[10px] text-emerald-300 mt-1">模拟支付成功</span></td><td class="align-top"><details><summary class="text-blue-300">奖金 ' + money(order.payouts.reduce((s, p) => s + p.cents, 0)) + ' · 展开</summary><div class="space-y-2 mt-3">' + order.payouts.map(p => '<div class="reward-card reward-tone-' + p.type + ' text-[11px]"><span class="mono font-semibold">' + escapeHTML(p.userId) + '</span> ' + REWARD_NAMES[p.type] + ' <span class="mono">+' + money(p.cents) + '</span><span class="block text-[10px] mt-1 opacity-80">' + escapeHTML(p.note) + '</span></div>').join('') + '</div></details></td></tr>').join('') + '</tbody></table></div>';
+    $('ledger-content').innerHTML = '<div class="table-scroll"><table><thead><tr><th>订单 / 时间</th><th>下单人</th><th>模拟扣款</th><th>分配详情</th></tr></thead><tbody>' + visible.map(order => '<tr><td class="align-top"><span class="mono text-slate-300">#' + String(order.id).padStart(4, '0') + '</span><span class="block text-[10px] muted mt-1 mono">' + order.time + '</span></td><td class="align-top mono">' + escapeHTML(order.buyerId) + (order.type === 'repurchase' ? '<span class="block text-[10px] text-amber-200 mt-1">复购 · 恢复邀请资格</span>' : '<span class="block text-[10px] muted mt-1">推荐 ' + escapeHTML(order.referrerId) + '</span><span class="reward-tag mt-2 reward-tone-' + (order.zone === 'group' ? 'group' : 'order') + '">' + orderZoneLabel(order) + ' · 第 ' + order.position + ' 位</span>') + '</td><td class="align-top"><span class="mono">−' + money(order.cents) + '</span><span class="block text-[10px] text-emerald-300 mt-1">模拟支付成功</span></td><td class="align-top"><details><summary class="text-blue-300">奖金 ' + money(order.payouts.reduce((s, p) => s + p.cents, 0)) + ' · 展开</summary><div class="space-y-2 mt-3">' + order.payouts.map(p => '<div class="reward-card reward-tone-' + p.type + ' text-[11px]"><span class="mono font-semibold">' + escapeHTML(p.userId) + '</span> ' + REWARD_NAMES[p.type] + ' <span class="mono">+' + money(p.cents) + '</span><span class="block text-[10px] mt-1 opacity-80">' + escapeHTML(p.note) + '</span></div>').join('') + '</div></details></td></tr>').join('') + '</tbody></table></div>';
   }
 }
 
 function renderAll() {
   $('operator').innerHTML = userOptions();
+  syncSlideModeUi();
   document.querySelectorAll('[data-reward-rate]').forEach(label => {
     label.textContent = REWARD_RATES[label.dataset.rewardRate] + '%';
   });
@@ -568,12 +638,30 @@ $('invite-form').addEventListener('submit', event => {
 $('reset-open').addEventListener('click', () => $('reset-dialog').showModal());
 $('reset-cancel').addEventListener('click', () => $('reset-dialog').close());
 $('reset-confirm').addEventListener('click', () => {
-  sim = new Simulation();
-  selectedId = viewRoot = ROOT_ID; ledgerMode = 'orders'; page = 0;
-  expanded.clear();
+  softResetSimulation(sim.slideMode || 'binary');
   $('reset-dialog').close();
   renderAll();
   resetTreePan();
   showToast('已恢复初始账号张三，可以重新开始模拟。');
+});
+$('slide-mode').addEventListener('change', event => {
+  const raw = event.target.value;
+  const next = raw === 'ternary' || raw === 'ternary_biz' || raw === 'ternary_biz_v2' || raw === 'left' || raw === 'alternate' ? raw : 'binary';
+  if (next === (sim.slideMode || 'binary')) return;
+  softResetSimulation(next);
+  renderAll();
+  resetTreePan();
+  const toast = next === 'binary'
+    ? '已切换为二二复制+双轨邀请（模拟已重置）'
+    : next === 'ternary'
+      ? '已切换为三三复制+三轨邀请（模拟已重置）'
+      : next === 'ternary_biz'
+        ? '已切换为三三纯商业版（扶持区邀请 · 左下复投计团，模拟已重置）'
+        : next === 'ternary_biz_v2'
+          ? '已切换为三三复制商业V2（L/R帮扶滑落 · 复投可挂点，模拟已重置）'
+          : next === 'alternate'
+            ? '已切换为试验版：左右轮换（邀请仍挂本人，模拟已重置）'
+            : '已切换为左链对照（第3人进扶持区，模拟已重置）';
+  showToast(toast);
 });
 renderAll();
